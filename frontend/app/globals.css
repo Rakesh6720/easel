@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 207 90% 42%; /* Azure Blue: #0078d4 */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 193 100% 47%; /* Azure Light Blue: #00bcf2 */
+    --accent-foreground: 222.2 84% 4.9%;
+    --destructive: 0 72% 51%; /* Azure Red: #d13438 */
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 207 90% 42%; /* Azure Blue */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 207 90% 54%; /* Lighter Azure Blue for dark mode */
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 193 100% 58%; /* Lighter Azure Light Blue for dark mode */
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 72% 61%; /* Lighter Azure Red for dark mode */
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 207 90% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Azure-themed custom utilities */
+@layer utilities {
+  .azure-gradient {
+    background: linear-gradient(135deg, #0078d4 0%, #00bcf2 100%);
+  }
+  
+  .azure-gradient-subtle {
+    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+  }
+  
+  .status-indicator {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-running {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .status-stopped {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .status-warning {
+    @apply bg-orange-100 text-orange-800;
+  }
+  
+  .status-provisioning {
+    @apply bg-blue-100 text-blue-800;
+  }
+}
