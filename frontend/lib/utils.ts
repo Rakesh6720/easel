@@ -13,13 +13,18 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: string | Date): string {
+  if (!date) return 'Never'
+  
+  const dateObj = new Date(date)
+  if (isNaN(dateObj.getTime())) return 'Invalid date'
+  
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(date))
+  }).format(dateObj)
 }
 
 export function getStatusColor(status: string): string {
