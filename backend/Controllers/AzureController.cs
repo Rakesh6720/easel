@@ -41,7 +41,7 @@ public class AzureController : ControllerBase
     }
 
     [HttpPost("credentials")]
-    public async Task<ActionResult<UserAzureCredential>> AddAzureCredentials(AddAzureCredentialsRequest request)
+    public async Task<ActionResult<UserAzureCredential>> AddAzureCredentials(Models.AddAzureCredentialsRequest request)
     {
         try
         {

@@ -4,8 +4,8 @@ namespace backend.Services;
 
 public interface IAuthService
 {
-    Task<AuthResult> RegisterAsync(RegisterRequest request);
-    Task<AuthResult> LoginAsync(LoginRequest request);
+    Task<AuthResult> RegisterAsync(Models.RegisterRequest request);
+    Task<AuthResult> LoginAsync(Models.LoginRequest request);
     Task<AuthResult> RefreshTokenAsync(string refreshToken);
     Task<bool> RevokeTokenAsync(string refreshToken);
     Task<User?> GetUserByIdAsync(int userId);
@@ -21,19 +21,4 @@ public class AuthResult
     public User? User { get; set; }
     public string? JwtToken { get; set; }
     public string? RefreshToken { get; set; }
-}
-
-public class RegisterRequest
-{
-    public string Email { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-    public string FirstName { get; set; } = string.Empty;
-    public string LastName { get; set; } = string.Empty;
-    public string? Company { get; set; }
-}
-
-public class LoginRequest
-{
-    public string Email { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
 }

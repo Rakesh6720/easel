@@ -31,6 +31,8 @@ public class AzureResource
     
     public DateTime? ProvisionedAt { get; set; }
     
+    public DateTime? DeletedAt { get; set; }
+    
     public List<ResourceMetric> Metrics { get; set; } = new();
 }
 

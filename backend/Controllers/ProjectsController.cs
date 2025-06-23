@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using backend.Models;
 using backend.Services;
+using backend.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace backend.Controllers;
@@ -194,7 +195,7 @@ public class ProjectsController : ControllerBase
         // User has confirmed deletion
         foreach (var resource in project.Resources.Where(r => r.Status == ResourceStatus.Active))
         {
-            await _azureResourceService.DeleteResourceAsync(resource.Id);
+            await _azureResourceService.DeleteResourceAsync(resource.Id, true);
         }
 
         _context.Projects.Remove(project);
@@ -243,12 +244,12 @@ public class ResourcesController : ControllerBase
         }
 
         // User has confirmed deletion
-        var success = await _azureResourceService.DeleteResourceAsync(id);
+        var result = await _azureResourceService.DeleteResourceAsync(id, true);
         
-        if (success)
-            return Ok(new { message = $"Resource '{resource.Name}' deletion initiated successfully." });
+        if (result.Success)
+            return Ok(new { message = result.Message });
         else
-            return BadRequest("Failed to delete resource");
+            return BadRequest(result.Message);
     }
 }
 

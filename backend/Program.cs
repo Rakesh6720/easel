@@ -15,11 +15,11 @@ builder.Services.AddSwaggerGen();
 
 // Database
 builder.Services.AddDbContext<EaselDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Azure services
 builder.Services.AddSingleton<DefaultAzureCredential>();
-builder.Services.AddScoped<IAzureResourceService, AzureResourceService>();
+builder.Services.AddScoped<IAzureResourceService, MockAzureResourceService>();
 builder.Services.AddScoped<IAzureMonitoringService, AzureMonitoringService>();
 
 // AI services
@@ -38,7 +38,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
-                builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured"))),
+                builder.Configuration["JwtSettings:SecretKey"] ?? throw new InvalidOperationException("JWT Key not configured"))),
             ValidateIssuer = false,
             ValidateAudience = false
         };
