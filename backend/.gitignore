@@ -1,0 +1,66 @@
+# .NET Core / ASP.NET Core
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# SENSITIVE FILES - NEVER COMMIT THESE
+appsettings.Development.json
+appsettings.Local.json
+appsettings.Production.json
+.env
+.env.local
+.env.production
+*.pfx
+*.p12
+secrets.json
+user-secrets/
+
+# Visual Studio
+.vs/
+*.suo
+*.ncb
+*.sdf
+*.opensdf
+*.vcxproj*
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Entity Framework
+Migrations/
+
+# NuGet
+*.nupkg
+packages/
+!packages/repositories.config
+
+# Test results
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Azure Functions
+local.settings.json
