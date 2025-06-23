@@ -211,7 +211,7 @@ public class AzureController : ControllerBase
     {
         try
         {
-            var metrics = await _azureMonitoringService.GetResourceMetricsAsync(id, startTime, endTime);
+            var metrics = await _azureMonitoringService.GetResourceMetricsAsync(id);
             return Ok(metrics);
         }
         catch (Exception ex)
@@ -226,7 +226,7 @@ public class AzureController : ControllerBase
     {
         try
         {
-            var usage = await _azureMonitoringService.GetResourceUsageStatsAsync(id);
+            var usage = await _azureMonitoringService.GetResourceUsageAsync(id);
             return Ok(usage);
         }
         catch (Exception ex)
@@ -241,7 +241,7 @@ public class AzureController : ControllerBase
     {
         try
         {
-            var cost = await _azureMonitoringService.GetCurrentMonthlyCostAsync(id);
+            var cost = await _azureMonitoringService.GetProjectCostAsync(id, DateTime.UtcNow.AddDays(-30), DateTime.UtcNow);
             return Ok(new { currentMonthlyCost = cost });
         }
         catch (Exception ex)
@@ -256,7 +256,7 @@ public class AzureController : ControllerBase
     {
         try
         {
-            await _azureMonitoringService.UpdateResourceMetricsAsync();
+            await _azureMonitoringService.UpdateResourceMetricsAsync(1); // TODO: Get actual project ID
             return Ok(new { message = "Metrics update initiated" });
         }
         catch (Exception ex)

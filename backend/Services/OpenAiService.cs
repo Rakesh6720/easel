@@ -1,18 +1,23 @@
-using OpenAI;
+using Azure.AI.OpenAI;
 using OpenAI.Chat;
 using System.Text.Json;
+using Azure;
 
 namespace backend.Services;
 
 public class OpenAiService : IOpenAiService
 {
-    private readonly OpenAIClient _client;
+    private readonly AzureOpenAIClient _client;
     private readonly ILogger<OpenAiService> _logger;
+    private readonly string _deploymentName;
 
     public OpenAiService(IConfiguration configuration, ILogger<OpenAiService> logger)
     {
-        var apiKey = configuration["OpenAI:ApiKey"] ?? throw new ArgumentException("OpenAI API key not configured");
-        _client = new OpenAIClient(apiKey);
+        var endpoint = configuration["AzureOpenAI:Endpoint"] ?? throw new ArgumentException("Azure OpenAI endpoint not configured");
+        var apiKey = configuration["AzureOpenAI:ApiKey"] ?? throw new ArgumentException("Azure OpenAI API key not configured");
+        _deploymentName = configuration["AzureOpenAI:DeploymentName"] ?? throw new ArgumentException("Azure OpenAI deployment name not configured");
+        
+        _client = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
         _logger = logger;
     }
 
@@ -35,7 +40,7 @@ Provide your analysis in a clear, structured format that can be used to recommen
 
         try
         {
-            var response = await _client.GetChatClient("gpt-4").CompleteChatAsync(
+            var response = await _client.GetChatClient(_deploymentName).CompleteChatAsync(
                 new ChatMessage[]
                 {
                     new SystemChatMessage(systemPrompt),
@@ -69,7 +74,7 @@ Format as a simple list of questions.
 
         try
         {
-            var response = await _client.GetChatClient("gpt-4").CompleteChatAsync(
+            var response = await _client.GetChatClient(_deploymentName).CompleteChatAsync(
                 new ChatMessage[]
                 {
                     new SystemChatMessage(systemPrompt),
@@ -138,7 +143,7 @@ Respond with a JSON array of resource recommendations:
 
         try
         {
-            var response = await _client.GetChatClient("gpt-4").CompleteChatAsync(
+            var response = await _client.GetChatClient(_deploymentName).CompleteChatAsync(
                 new ChatMessage[]
                 {
                     new SystemChatMessage(systemPrompt),

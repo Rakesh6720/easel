@@ -19,7 +19,7 @@ builder.Services.AddDbContext<EaselDbContext>(options =>
 
 // Azure services
 builder.Services.AddSingleton<DefaultAzureCredential>();
-builder.Services.AddScoped<IAzureResourceService, MockAzureResourceService>();
+builder.Services.AddScoped<IAzureResourceService, ProductionAzureResourceService>();
 builder.Services.AddScoped<IAzureMonitoringService, AzureMonitoringService>();
 
 // AI services
