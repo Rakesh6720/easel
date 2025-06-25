@@ -1,28 +1,34 @@
-"use client"
+"use client";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { 
-  Activity, 
-  TrendingUp, 
-  DollarSign, 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Activity,
+  TrendingUp,
+  DollarSign,
   Server,
   Plus,
   ArrowUpRight,
   Cloud,
   Database,
-  Globe
+  Globe,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { 
-  mockDashboardStats, 
-  mockRecentProjects, 
+import {
+  mockDashboardStats,
+  mockRecentProjects,
   mockResourceTypes,
   type DashboardStat,
   type RecentProject,
-  type ResourceType
-} from "@/lib/mock-dashboard-data"
-import Link from "next/link"
+  type ResourceType,
+} from "@/lib/mock-dashboard-data";
+import Link from "next/link";
 
 export default function Dashboard() {
   return (
@@ -55,9 +61,11 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stat.value}</div>
-              <p className={`text-xs ${
-                stat.trend === 'up' ? 'text-azure-green' : 'text-azure-red'
-              }`}>
+              <p
+                className={`text-xs ${
+                  stat.trend === "up" ? "text-azure-green" : "text-azure-red"
+                }`}
+              >
                 {stat.change}
               </p>
             </CardContent>
@@ -87,7 +95,10 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               {mockRecentProjects.map((project) => (
-                <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                <div
+                  key={project.id}
+                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                >
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 azure-gradient rounded-lg flex items-center justify-center">
                       <span className="text-white font-semibold text-sm">
@@ -104,13 +115,17 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <span className={`status-indicator ${project.status === 'Active' ? 'status-running' : 'status-provisioning'}`}>
+                    <span
+                      className={`status-indicator ${
+                        project.status === "Active"
+                          ? "status-running"
+                          : "status-provisioning"
+                      }`}
+                    >
                       {project.status}
                     </span>
                     <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/projects/${project.id}`}>
-                        View
-                      </Link>
+                      <Link href={`/projects/${project.id}`}>View</Link>
                     </Button>
                   </div>
                 </div>
@@ -130,9 +145,14 @@ export default function Dashboard() {
           <CardContent>
             <div className="space-y-4">
               {mockResourceTypes.map((type) => (
-                <div key={type.name} className="flex items-center justify-between">
+                <div
+                  key={type.name}
+                  className="flex items-center justify-between"
+                >
                   <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 ${type.color} rounded-lg flex items-center justify-center`}>
+                    <div
+                      className={`w-8 h-8 ${type.color} rounded-lg flex items-center justify-center`}
+                    >
                       <type.icon className="h-4 w-4 text-white" />
                     </div>
                     <span className="font-medium">{type.name}</span>
@@ -153,5 +173,5 @@ export default function Dashboard() {
         </Card>
       </div>
     </div>
-  )
+  );
 }

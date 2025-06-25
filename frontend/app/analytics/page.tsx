@@ -35,7 +35,7 @@ import {
   type AnalyticsOverview,
   type ResourceUtilization,
   type ProjectPerformance,
-  type CostTrend
+  type CostTrend,
 } from "@/lib/mock-analytics-data";
 import Link from "next/link";
 
@@ -285,7 +285,9 @@ export default function AnalyticsPage() {
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
                   Current month:{" "}
-                  {formatCurrency(mockCostTrends[mockCostTrends.length - 1].amount)}
+                  {formatCurrency(
+                    mockCostTrends[mockCostTrends.length - 1].amount
+                  )}
                 </p>
               </div>
             </div>

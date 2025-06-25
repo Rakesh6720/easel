@@ -72,7 +72,9 @@ export const projectConversations: Record<number, ProjectConversation[]> = {
 
 // Helper functions for project-specific data
 export function getProjectRequirements(projectId: number): string {
-  return projectRequirements[projectId] || "Project requirements not specified.";
+  return (
+    projectRequirements[projectId] || "Project requirements not specified."
+  );
 }
 
 export function getProcessedRequirements(projectId: number): string {
@@ -82,6 +84,8 @@ export function getProcessedRequirements(projectId: number): string {
   );
 }
 
-export function getConversationsForProject(projectId: number): ProjectConversation[] {
+export function getConversationsForProject(
+  projectId: number
+): ProjectConversation[] {
   return projectConversations[projectId] || [];
 }

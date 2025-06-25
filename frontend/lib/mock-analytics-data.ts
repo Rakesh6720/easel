@@ -1,38 +1,38 @@
 // Analytics overview interface
 export interface AnalyticsOverview {
-  totalResources: number
-  activeProjects: number
-  monthlySpend: number
-  utilizationRate: number
-  growthRate: number
-  alertsActive: number
+  totalResources: number;
+  activeProjects: number;
+  monthlySpend: number;
+  utilizationRate: number;
+  growthRate: number;
+  alertsActive: number;
 }
 
 // Resource utilization interface
 export interface ResourceUtilization {
-  category: string
-  totalResources: number
-  utilizationRate: number
-  trend: 'up' | 'down'
-  change: string
-  cost: number
+  category: string;
+  totalResources: number;
+  utilizationRate: number;
+  trend: "up" | "down";
+  change: string;
+  cost: number;
 }
 
 // Project performance interface
 export interface ProjectPerformance {
-  id: number
-  name: string
-  resources: number
-  uptime: number
-  cost: number
-  efficiency: number
-  status: 'healthy' | 'warning' | 'critical'
+  id: number;
+  name: string;
+  resources: number;
+  uptime: number;
+  cost: number;
+  efficiency: number;
+  status: "healthy" | "warning" | "critical";
 }
 
 // Cost trend interface
 export interface CostTrend {
-  month: string
-  amount: number
+  month: string;
+  amount: number;
 }
 
 // Mock analytics overview data
@@ -43,7 +43,7 @@ export const mockAnalyticsOverview: AnalyticsOverview = {
   utilizationRate: 78.5,
   growthRate: 15.2,
   alertsActive: 3,
-}
+};
 
 // Mock resource utilization data
 export const mockResourceUtilization: ResourceUtilization[] = [
@@ -79,7 +79,7 @@ export const mockResourceUtilization: ResourceUtilization[] = [
     change: "+1.8%",
     cost: 220.26,
   },
-]
+];
 
 // Mock project performance data
 export const mockProjectPerformance: ProjectPerformance[] = [
@@ -110,7 +110,7 @@ export const mockProjectPerformance: ProjectPerformance[] = [
     efficiency: 76.8,
     status: "warning",
   },
-]
+];
 
 // Mock cost trends data
 export const mockCostTrends: CostTrend[] = [
@@ -119,37 +119,43 @@ export const mockCostTrends: CostTrend[] = [
   { month: "Oct", amount: 2956.23 },
   { month: "Nov", amount: 3247.83 },
   { month: "Dec", amount: 3389.12 },
-]
+];
 
 // Helper functions for analytics data
 export const getTotalCostByCategory = () => {
-  return mockResourceUtilization.reduce((total, category) => total + category.cost, 0)
-}
+  return mockResourceUtilization.reduce(
+    (total, category) => total + category.cost,
+    0
+  );
+};
 
 export const getAverageUtilization = () => {
-  const totalUtilization = mockResourceUtilization.reduce((total, category) => total + category.utilizationRate, 0)
-  return totalUtilization / mockResourceUtilization.length
-}
+  const totalUtilization = mockResourceUtilization.reduce(
+    (total, category) => total + category.utilizationRate,
+    0
+  );
+  return totalUtilization / mockResourceUtilization.length;
+};
 
-export const getProjectsByStatus = (status: ProjectPerformance['status']) => {
-  return mockProjectPerformance.filter(project => project.status === status)
-}
+export const getProjectsByStatus = (status: ProjectPerformance["status"]) => {
+  return mockProjectPerformance.filter((project) => project.status === status);
+};
 
 export const getHighestCostCategory = () => {
-  return mockResourceUtilization.reduce((highest, current) => 
+  return mockResourceUtilization.reduce((highest, current) =>
     current.cost > highest.cost ? current : highest
-  )
-}
+  );
+};
 
 export const getLowestEfficiencyProject = () => {
-  return mockProjectPerformance.reduce((lowest, current) => 
+  return mockProjectPerformance.reduce((lowest, current) =>
     current.efficiency < lowest.efficiency ? current : lowest
-  )
-}
+  );
+};
 
 export const getCostGrowthRate = () => {
-  if (mockCostTrends.length < 2) return 0
-  const latest = mockCostTrends[mockCostTrends.length - 1].amount
-  const previous = mockCostTrends[mockCostTrends.length - 2].amount
-  return ((latest - previous) / previous) * 100
-}
+  if (mockCostTrends.length < 2) return 0;
+  const latest = mockCostTrends[mockCostTrends.length - 1].amount;
+  const previous = mockCostTrends[mockCostTrends.length - 2].amount;
+  return ((latest - previous) / previous) * 100;
+};

@@ -32,11 +32,11 @@ import {
   getStatusColor,
   getResourceTypeIcon,
 } from "@/lib/utils";
-import { 
-  allMockResourcesData, 
-  ResourceData, 
-  resourceCategories, 
-  getResourceCategory 
+import {
+  allMockResourcesData,
+  ResourceData,
+  resourceCategories,
+  getResourceCategory,
 } from "@/lib/mock-resource-data";
 import Link from "next/link";
 
