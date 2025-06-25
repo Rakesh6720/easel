@@ -80,12 +80,16 @@ export default function RecommendationsPage() {
       const data = await projectsService.generateRecommendations(
         parseInt(params.id as string)
       );
+      console.log("Received recommendations:", data);
+      console.log("First recommendation:", data[0]);
+      console.log("First recommendation ID:", data[0]?.id);
       setRecommendations(data);
 
       // Auto-select recommended resources
       const recommendedIds = data
-        .filter((r: AzureResourceRecommendation) => r.isRecommended)
+        .filter((r: AzureResourceRecommendation) => r.isRecommended && r.id)
         .map((r: AzureResourceRecommendation) => r.id);
+      console.log("Auto-selecting recommended IDs:", recommendedIds);
       setSelectedResources(recommendedIds);
     } catch (err) {
       setError(
@@ -100,11 +104,21 @@ export default function RecommendationsPage() {
   };
 
   const handleResourceToggle = (resourceId: string) => {
-    setSelectedResources((prev) =>
-      prev.includes(resourceId)
+    console.log("Toggling resource:", resourceId);
+    console.log("Current selected resources:", selectedResources);
+
+    if (!resourceId) {
+      console.error("Resource ID is undefined or null");
+      return;
+    }
+
+    setSelectedResources((prev) => {
+      const newSelection = prev.includes(resourceId)
         ? prev.filter((id) => id !== resourceId)
-        : [...prev, resourceId]
-    );
+        : [...prev, resourceId];
+      console.log("New selected resources:", newSelection);
+      return newSelection;
+    });
   };
 
   const selectedResourcesData = recommendations.filter((r) =>
@@ -119,9 +133,14 @@ export default function RecommendationsPage() {
     setIsProvisioning(true);
 
     try {
-      const selectedRecommendations = recommendations.filter((r) =>
-        selectedResources.includes(r.id)
+      const selectedRecommendations = recommendations.filter(
+        (r) => r.id && selectedResources.includes(r.id)
       );
+
+      if (selectedRecommendations.length === 0) {
+        setError("No valid resources selected for provisioning");
+        return;
+      }
 
       await projectsService.provisionResources(
         parseInt(params.id as string),
@@ -265,95 +284,103 @@ export default function RecommendationsPage() {
             </div>
           </div>
 
-          {recommendations.map((resource) => (
-            <Card
-              key={resource.id}
-              className={`transition-all duration-200 ${
-                selectedResources.includes(resource.id)
-                  ? "ring-2 ring-azure-blue border-azure-blue"
-                  : ""
-              }`}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
-                  <input
-                    type="checkbox"
-                    checked={selectedResources.includes(resource.id)}
-                    onChange={() => handleResourceToggle(resource.id)}
-                    className="mt-1 h-4 w-4 text-azure-blue border-gray-300 rounded focus:ring-azure-blue"
-                  />
+          {recommendations
+            .filter((resource) => resource && resource.id)
+            .map((resource) => (
+              <Card
+                key={resource.id}
+                className={`transition-all duration-200 ${
+                  selectedResources.includes(resource.id)
+                    ? "ring-2 ring-azure-blue border-azure-blue"
+                    : ""
+                }`}
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-start space-x-4">
+                    <input
+                      type="checkbox"
+                      checked={
+                        resource.id
+                          ? selectedResources.includes(resource.id)
+                          : false
+                      }
+                      onChange={() =>
+                        resource.id && handleResourceToggle(resource.id)
+                      }
+                      className="mt-1 h-4 w-4 text-azure-blue border-gray-300 rounded focus:ring-azure-blue"
+                    />
 
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-azure-gradient rounded-lg flex items-center justify-center text-white">
-                          {getResourceIcon(resource.resourceType)}
-                        </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h3 className="font-semibold text-lg">
-                              {resource.name}
-                            </h3>
-                            {resource.isRecommended && (
-                              <Badge className="bg-azure-green text-white">
-                                <CheckCircle className="mr-1 h-3 w-3" />
-                                Recommended
-                              </Badge>
-                            )}
-                            <Badge
-                              variant={
-                                resource.priority === "High"
-                                  ? "destructive"
-                                  : resource.priority === "Medium"
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                            >
-                              {resource.priority} Priority
-                            </Badge>
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-azure-gradient rounded-lg flex items-center justify-center text-white">
+                            {getResourceIcon(resource.resourceType)}
                           </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <h3 className="font-semibold text-lg">
+                                {resource.name}
+                              </h3>
+                              {resource.isRecommended && (
+                                <Badge className="bg-azure-green text-white">
+                                  <CheckCircle className="mr-1 h-3 w-3" />
+                                  Recommended
+                                </Badge>
+                              )}
+                              <Badge
+                                variant={
+                                  resource.priority === "High"
+                                    ? "destructive"
+                                    : resource.priority === "Medium"
+                                    ? "secondary"
+                                    : "outline"
+                                }
+                              >
+                                {resource.priority} Priority
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {resource.sku} • {resource.location}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-lg">
+                            {formatCurrency(resource.estimatedMonthlyCost)}
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            {resource.sku} • {resource.location}
+                            per month
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-lg">
-                          {formatCurrency(resource.estimatedMonthlyCost)}
+
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">
+                          {resource.description}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          per month
+                        <p className="text-sm font-medium text-azure-blue">
+                          {resource.justification}
                         </p>
                       </div>
-                    </div>
 
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {resource.description}
-                      </p>
-                      <p className="text-sm font-medium text-azure-blue">
-                        {resource.justification}
-                      </p>
+                      {resource.features && resource.features.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {resource.features.map((feature, index) => (
+                            <Badge
+                              key={index}
+                              variant="secondary"
+                              className="text-xs"
+                            >
+                              {feature}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
-
-                    {resource.features && resource.features.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {resource.features.map((feature, index) => (
-                          <Badge
-                            key={index}
-                            variant="secondary"
-                            className="text-xs"
-                          >
-                            {feature}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ))}
 
           {recommendations.length === 0 && (
             <Card>

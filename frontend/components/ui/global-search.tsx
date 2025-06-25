@@ -83,9 +83,11 @@ export function GlobalSearch({
     );
   };
 
-  const getStatusColor = (status?: string) => {
+  const getStatusColor = (status?: string | any) => {
     if (!status) return "bg-gray-100 text-gray-800";
-    switch (status.toLowerCase()) {
+    const statusStr =
+      typeof status === "string" ? status : String(status || "");
+    switch (statusStr.toLowerCase()) {
       case "active":
       case "running":
         return "bg-green-100 text-green-800";

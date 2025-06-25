@@ -231,29 +231,89 @@ class ProjectsService {
 
   async generateRecommendations(id: number): Promise<any[]> {
     // Return mock recommendations for test user
+    console.log("generateRecommendations called, isTestUser():", isTestUser());
     if (isTestUser()) {
+      console.log("Using mock data for test user");
       return new Promise((resolve) => {
         setTimeout(
           () =>
             resolve([
               {
-                id: 1,
-                type: "App Service",
+                id: "1",
                 name: "web-app-eastus",
-                region: "East US",
-                tier: "Standard",
-                estimatedCost: 73.2,
-                recommendation:
-                  "Recommended for web applications with moderate traffic",
+                resourceType: "Microsoft.Web/sites",
+                sku: "Standard S1",
+                location: "East US",
+                estimatedMonthlyCost: 73.2,
+                description: "Azure App Service for hosting web applications",
+                justification:
+                  "Perfect for hosting your web application with built-in scaling and monitoring",
+                features: [
+                  "Auto-scaling",
+                  "Built-in monitoring",
+                  "SSL certificates",
+                  "Custom domains",
+                ],
+                priority: "High" as "High" | "Medium" | "Low",
+                isRecommended: true,
               },
               {
-                id: 2,
-                type: "Azure SQL Database",
+                id: "2",
                 name: "sql-db-eastus",
-                region: "East US",
-                tier: "S2",
-                estimatedCost: 30.0,
-                recommendation: "Recommended for relational data storage",
+                resourceType: "Microsoft.Sql/servers/databases",
+                sku: "Standard S2",
+                location: "East US",
+                estimatedMonthlyCost: 30.0,
+                description: "Azure SQL Database for relational data storage",
+                justification:
+                  "Reliable and scalable database solution for your application data",
+                features: [
+                  "Automatic backups",
+                  "Built-in security",
+                  "Elastic scaling",
+                  "High availability",
+                ],
+                priority: "High" as "High" | "Medium" | "Low",
+                isRecommended: true,
+              },
+              {
+                id: "3",
+                name: "storage-eastus",
+                resourceType: "Microsoft.Storage/storageAccounts",
+                sku: "Standard LRS",
+                location: "East US",
+                estimatedMonthlyCost: 15.5,
+                description: "Azure Storage Account for file and blob storage",
+                justification:
+                  "Cost-effective storage solution for application assets and user uploads",
+                features: [
+                  "99.999% availability",
+                  "Multiple storage types",
+                  "Global replication",
+                  "Built-in security",
+                ],
+                priority: "Medium" as "High" | "Medium" | "Low",
+                isRecommended: false,
+              },
+              {
+                id: "4",
+                name: "insights-eastus",
+                resourceType: "Microsoft.Insights/components",
+                sku: "Basic",
+                location: "East US",
+                estimatedMonthlyCost: 5.0,
+                description:
+                  "Application Insights for monitoring and analytics",
+                justification:
+                  "Essential for monitoring application performance and user behavior",
+                features: [
+                  "Real-time monitoring",
+                  "Custom dashboards",
+                  "Alerting",
+                  "Performance analytics",
+                ],
+                priority: "Medium" as "High" | "Medium" | "Low",
+                isRecommended: true,
               },
             ]),
           500

@@ -26,8 +26,9 @@ import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { projectsService, type Project } from "@/lib/projects";
 import Link from "next/link";
 
-const getStatusIcon = (status: string) => {
-  switch (status.toLowerCase()) {
+const getStatusIcon = (status: string | any) => {
+  const statusStr = typeof status === "string" ? status : String(status || "");
+  switch (statusStr.toLowerCase()) {
     case "active":
       return <Play className="h-4 w-4 text-azure-green" />;
     case "provisioning":
@@ -55,8 +56,8 @@ export default function ProjectsPage() {
         setProjects(fetchedProjects);
         setError(null);
       } catch (err) {
-        setError('Failed to load projects');
-        console.error('Error fetching projects:', err);
+        setError("Failed to load projects");
+        console.error("Error fetching projects:", err);
       } finally {
         setLoading(false);
       }
@@ -77,7 +78,10 @@ export default function ProjectsPage() {
         project.name.toLowerCase().includes(searchLower) ||
         project.description.toLowerCase().includes(searchLower) ||
         project.userRequirements.toLowerCase().includes(searchLower) ||
-        project.status.toLowerCase().includes(searchLower)
+        (typeof project.status === "string"
+          ? project.status.toLowerCase()
+          : String(project.status || "")
+        ).includes(searchLower)
     );
   }, [projects, searchTerm]);
 
@@ -147,7 +151,9 @@ export default function ProjectsPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-muted-foreground mb-4">
-              {searchTerm ? 'No projects found matching your search' : 'No projects yet'}
+              {searchTerm
+                ? "No projects found matching your search"
+                : "No projects yet"}
             </p>
             <Button variant="azure" asChild>
               <Link href="/projects/new">
@@ -160,97 +166,101 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((project) => (
-          <Card
-            key={project.id}
-            className="hover:shadow-lg transition-shadow cursor-pointer group"
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 azure-gradient rounded-lg flex items-center justify-center">
-                    <span className="text-white font-semibold">
-                      {project.name.charAt(0)}
-                    </span>
+            <Card
+              key={project.id}
+              className="hover:shadow-lg transition-shadow cursor-pointer group"
+            >
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 azure-gradient rounded-lg flex items-center justify-center">
+                      <span className="text-white font-semibold">
+                        {project.name.charAt(0)}
+                      </span>
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg group-hover:text-azure-blue transition-colors">
+                        {project.name}
+                      </CardTitle>
+                      <div className="flex items-center space-x-2 mt-1">
+                        {getStatusIcon(project.status)}
+                        <span
+                          className={`text-sm font-medium ${getStatusColor(
+                            project.status
+                          )}`}
+                        >
+                          {project.status}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-lg group-hover:text-azure-blue transition-colors">
-                      {project.name}
-                    </CardTitle>
-                    <div className="flex items-center space-x-2 mt-1">
-                      {getStatusIcon(project.status)}
-                      <span
-                        className={`text-sm font-medium ${getStatusColor(
-                          project.status
-                        )}`}
-                      >
-                        {project.status}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </div>
+                <CardDescription className="line-clamp-2">
+                  {project.description}
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Server className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {project.resources?.length || 0} resources
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {formatCurrency(
+                          project.resources?.reduce(
+                            (sum, r) => sum + (r.estimatedMonthlyCost || 0),
+                            0
+                          ) || 0
+                        )}
+                        /mo
                       </span>
                     </div>
                   </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </div>
-              <CardDescription className="line-clamp-2">
-                {project.description}
-              </CardDescription>
-            </CardHeader>
 
-            <CardContent>
-              <div className="space-y-4">
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    <Server className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      {project.resources?.length || 0} resources
-                    </span>
+                  {/* Dates */}
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-3 w-3" />
+                      <span>Created {formatDate(project.createdAt)}</span>
+                    </div>
+                    <div>Updated {formatDate(project.updatedAt)}</div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      {formatCurrency(
-                        project.resources?.reduce((sum, r) => sum + (r.estimatedMonthlyCost || 0), 0) || 0
-                      )}/mo
-                    </span>
-                  </div>
-                </div>
 
-                {/* Dates */}
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-3 w-3" />
-                    <span>Created {formatDate(project.createdAt)}</span>
-                  </div>
-                  <div>Updated {formatDate(project.updatedAt)}</div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center space-x-2 pt-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    asChild
-                  >
-                    <Link href={`/projects/${project.id}`}>View Details</Link>
-                  </Button>
-                  {project.status === "Active" && (
-                    <Button size="sm" variant="ghost" asChild>
-                      <Link href={`/projects/${project.id}/resources`}>
-                        Resources
-                      </Link>
+                  {/* Actions */}
+                  <div className="flex items-center space-x-2 pt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      asChild
+                    >
+                      <Link href={`/projects/${project.id}`}>View Details</Link>
                     </Button>
-                  )}
+                    {project.status === "Active" && (
+                      <Button size="sm" variant="ghost" asChild>
+                        <Link href={`/projects/${project.id}/resources`}>
+                          Resources
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
