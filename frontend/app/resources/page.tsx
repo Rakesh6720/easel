@@ -310,9 +310,11 @@ export default function ResourcesPage() {
                       <Badge className={getStatusColor(resource.status)}>
                         {resource.status}
                       </Badge>
-                      <Button variant="outline" size="sm">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Manage
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/resources/${resource.id}`}>
+                          <Settings className="mr-2 h-4 w-4" />
+                          Manage
+                        </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
                         <a
