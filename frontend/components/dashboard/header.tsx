@@ -1,18 +1,10 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { 
-  Bell, 
-  Search, 
-  Menu,
-  Sun,
-  Moon,
-  LogOut,
-  User
-} from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { useAuth } from "@/contexts/auth-context"
-import { useState } from "react"
+import { Button } from "@/components/ui/button";
+import { Bell, Menu, Sun, Moon, LogOut, User, Settings } from "lucide-react";
+import { GlobalSearch } from "@/components/ui/global-search";
+import { useAuth } from "@/contexts/auth-context";
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,59 +12,66 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
+import Link from "next/link";
 
 interface HeaderProps {
-  onMenuClick?: () => void
+  onMenuClick?: () => void;
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const [isDark, setIsDark] = useState(false)
-  const { user, logout, loading } = useAuth()
+  const [isDark, setIsDark] = useState(false);
+  const { user, logout, loading } = useAuth();
 
   const toggleTheme = () => {
-    setIsDark(!isDark)
-    document.documentElement.classList.toggle('dark')
-  }
+    setIsDark(!isDark);
+    document.documentElement.classList.toggle("dark");
+  };
 
   const handleLogout = async () => {
     try {
-      await logout()
-      window.location.href = '/login'
+      await logout();
+      window.location.href = "/login";
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error("Logout error:", error);
     }
-  }
+  };
 
   return (
-    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center px-4 lg:px-6">
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
+      <div className="flex h-16 items-center px-4 lg:px-6">
         {/* Mobile menu button */}
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden mr-2"
+          className="lg:hidden mr-2 shrink-0"
           onClick={onMenuClick}
         >
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* Search */}
-        <div className="flex-1 flex items-center space-x-4 max-w-md">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search projects, resources..."
-              className="pl-10"
-            />
+        {/* Logo (visible on mobile) */}
+        <div className="lg:hidden flex items-center space-x-2 mr-4">
+          <div className="w-8 h-8 azure-gradient rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-sm">E</span>
           </div>
+          <span className="font-semibold text-primary">Easel</span>
+        </div>
+
+        {/* Search */}
+        <div className="flex-1 flex items-center justify-center max-w-2xl mx-auto">
+          <GlobalSearch className="w-full max-w-md" />
         </div>
 
         {/* Right side actions */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2 shrink-0">
           {/* Theme toggle */}
-          <Button variant="ghost" size="icon" onClick={toggleTheme}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="hidden sm:flex"
+          >
             {isDark ? (
               <Sun className="h-5 w-5" />
             ) : (
@@ -94,7 +93,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <div className="w-8 h-8 bg-azure-blue rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {user?.firstName?.charAt(0)?.toUpperCase() || 'U'}
+                    {user?.firstName?.charAt(0)?.toUpperCase() || "U"}
                   </span>
                 </div>
               </Button>
@@ -111,15 +110,34 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <User className="mr-2 h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <span>Settings</span>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
+              </DropdownMenuItem>
+              {/* Theme toggle for mobile */}
+              <DropdownMenuItem onClick={toggleTheme} className="sm:hidden">
+                {isDark ? (
+                  <>
+                    <Sun className="mr-2 h-4 w-4" />
+                    <span>Light mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="mr-2 h-4 w-4" />
+                    <span>Dark mode</span>
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={handleLogout}
                 disabled={loading}
                 className="text-destructive focus:text-destructive"
@@ -132,5 +150,5 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }
