@@ -7,8 +7,10 @@ export interface ResourceData {
   type: string;
   status: string;
   location: string;
+  region: string; // Add region property for the resources page
   cost: number;
   lastUpdated: string;
+  createdAt: string; // Add createdAt property for the resources page
   resourceGroup: string;
   subscription: string;
   azureResourceId: string;
@@ -36,10 +38,12 @@ export const mockResourcesData: Record<number, ResourceData> = {
     id: 1,
     name: "ecommerce-app-service",
     type: "microsoft.web/sites",
-    status: "Active",
+    status: "running",
     location: "East US",
+    region: "East US",
     cost: 156.32,
     lastUpdated: "2024-01-20T14:22:00Z",
+    createdAt: "2024-01-15T10:30:00Z",
     resourceGroup: "ecommerce-rg",
     subscription: "Easel Development",
     azureResourceId:
@@ -58,10 +62,12 @@ export const mockResourcesData: Record<number, ResourceData> = {
     id: 2,
     name: "ecommerce-sql-db",
     type: "microsoft.sql/servers/databases",
-    status: "Active",
+    status: "running",
     location: "East US",
+    region: "East US",
     cost: 198.45,
     lastUpdated: "2024-01-20T12:15:00Z",
+    createdAt: "2024-01-15T11:00:00Z",
     resourceGroup: "ecommerce-rg",
     subscription: "Easel Development",
     azureResourceId:
@@ -82,8 +88,10 @@ export const mockResourcesData: Record<number, ResourceData> = {
     type: "microsoft.storage/storageaccounts",
     status: "Active",
     location: "East US",
+    region: "East US",
     cost: 45.21,
     lastUpdated: "2024-01-20T10:30:00Z",
+    createdAt: "2024-01-15T12:00:00Z",
     resourceGroup: "ecommerce-rg",
     subscription: "Easel Development",
     azureResourceId:
@@ -103,8 +111,10 @@ export const mockResourcesData: Record<number, ResourceData> = {
     type: "microsoft.insights/components",
     status: "Active",
     location: "East US",
+    region: "East US",
     cost: 25.34,
     lastUpdated: "2024-01-20T09:45:00Z",
+    createdAt: "2024-01-15T13:30:00Z",
     resourceGroup: "ecommerce-rg",
     subscription: "Easel Development",
     azureResourceId:
@@ -343,4 +353,11 @@ export const getCurrentMetrics = (resourceId: number): Record<string, any> => {
       responseTime: { current: 0, average: 0, p95: 0 },
     }
   );
+};
+
+// Helper function to get resources for a specific project
+export const getResourcesForProject = (projectId: number): ResourceData[] => {
+  // For now, return all resources for any project
+  // In a real app, you would filter based on the project ID
+  return Object.values(mockResourcesData);
 };
