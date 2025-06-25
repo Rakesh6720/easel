@@ -2,8 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using backend.Models;
 using backend.Services;
-using backend.Data;
-using Microsoft.EntityFrameworkCore;
+using backend.Repositories;
 using System.Security.Claims;
 
 namespace backend.Controllers;
@@ -13,18 +12,18 @@ namespace backend.Controllers;
 [Authorize]
 public class AzureController : ControllerBase
 {
-    private readonly EaselDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IAzureResourceService _azureResourceService;
     private readonly IAzureMonitoringService _azureMonitoringService;
     private readonly ILogger<AzureController> _logger;
 
     public AzureController(
-        EaselDbContext context,
+        IUnitOfWork unitOfWork,
         IAzureResourceService azureResourceService,
         IAzureMonitoringService azureMonitoringService,
         ILogger<AzureController> logger)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _azureResourceService = azureResourceService;
         _azureMonitoringService = azureMonitoringService;
         _logger = logger;
@@ -55,10 +54,11 @@ public class AzureController : ControllerBase
             }
 
             // Check if user already has credentials with same subscription ID
-            var existingCredential = await _context.UserAzureCredentials
-                .FirstOrDefaultAsync(c => c.UserId == userId && c.SubscriptionId == request.SubscriptionId);
+            var existingCredential = await _unitOfWork.UserAzureCredentials
+                .FindAsync(c => c.UserId == userId && c.SubscriptionId == request.SubscriptionId);
+            var existingCredentialItem = existingCredential.FirstOrDefault();
             
-            if (existingCredential != null)
+            if (existingCredentialItem != null)
             {
                 return BadRequest(new { message = "Credentials for this subscription already exist" });
             }
@@ -83,16 +83,17 @@ public class AzureController : ControllerBase
             }
 
             // Set as default if this is the user's first credential
-            var userCredentialCount = await _context.UserAzureCredentials
-                .CountAsync(c => c.UserId == userId && c.IsActive);
+            var userCredentials = await _unitOfWork.UserAzureCredentials
+                .FindAsync(c => c.UserId == userId && c.IsActive);
+            var userCredentialCount = userCredentials.Count();
             
             if (userCredentialCount == 0)
             {
                 credentials.IsDefault = true;
             }
 
-            _context.UserAzureCredentials.Add(credentials);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.UserAzureCredentials.AddAsync(credentials);
+            await _unitOfWork.SaveChangesAsync();
 
             _logger.LogInformation("Azure credentials added successfully for user {UserId}, subscription {SubscriptionId}", 
                 userId, request.SubscriptionId);
@@ -122,15 +123,23 @@ public class AzureController : ControllerBase
     [HttpGet("credentials/{id}")]
     public async Task<ActionResult<UserAzureCredential>> GetAzureCredentials(int id)
     {
-        var credentials = await _context.UserAzureCredentials.FindAsync(id);
-        
-        if (credentials == null)
-            return NotFound();
+        try
+        {
+            var credentials = await _unitOfWork.UserAzureCredentials.GetByIdAsync(id);
+            
+            if (credentials == null)
+                return NotFound();
 
-        // Don't return the client secret
-        credentials.ClientSecret = "***";
-        
-        return Ok(credentials);
+            // Don't return the client secret
+            credentials.ClientSecret = "***";
+            
+            return Ok(credentials);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Azure credentials {CredentialId}", id);
+            return StatusCode(500, new { message = "Failed to get Azure credentials" });
+        }
     }
 
     [HttpGet("credentials")]
@@ -140,8 +149,10 @@ public class AzureController : ControllerBase
         {
             var userId = GetCurrentUserId();
             
-            var credentials = await _context.UserAzureCredentials
-                .Where(c => c.UserId == userId && c.IsActive)
+            var userCredentials = await _unitOfWork.UserAzureCredentials
+                .FindAsync(c => c.UserId == userId && c.IsActive);
+            
+            var credentials = userCredentials
                 .OrderByDescending(c => c.IsDefault)
                 .ThenByDescending(c => c.LastValidated)
                 .Select(c => new
@@ -155,7 +166,7 @@ public class AzureController : ControllerBase
                     lastValidated = c.LastValidated,
                     createdAt = c.CreatedAt
                 })
-                .ToListAsync();
+                .ToList();
             
             return Ok(credentials);
         }
@@ -169,15 +180,15 @@ public class AzureController : ControllerBase
     [HttpPost("credentials/{id}/validate")]
     public async Task<ActionResult> ValidateAzureCredentials(int id)
     {
-        var credentials = await _context.UserAzureCredentials.FindAsync(id);
-        
-        if (credentials == null)
-            return NotFound();
-
         try
         {
+            var credentials = await _unitOfWork.UserAzureCredentials.GetByIdAsync(id);
+            
+            if (credentials == null)
+                return NotFound();
+
             var isValid = await _azureResourceService.ValidateAzureCredentialsAsync(credentials);
-            await _context.SaveChangesAsync();
+            await _unitOfWork.SaveChangesAsync();
             
             return Ok(new { isValid, lastValidated = credentials.LastValidated });
         }
@@ -269,32 +280,38 @@ public class AzureController : ControllerBase
     [HttpDelete("credentials/{id}")]
     public async Task<ActionResult> DeleteAzureCredentials(int id, [FromQuery] bool confirmed = false)
     {
-        var credentials = await _context.UserAzureCredentials
-            .Include(c => c.Projects)
-            .FirstOrDefaultAsync(c => c.Id == id);
-
-        if (credentials == null)
-            return NotFound();
-
-        if (!confirmed)
+        try
         {
-            var activeProjects = credentials.Projects.Where(p => p.Status == ProjectStatus.Active).Count();
-            
-            return Ok(new CredentialDeleteConfirmationResponse
+            var credentials = await _unitOfWork.UserAzureCredentials.GetByIdWithIncludesAsync(id, c => c.Projects);
+
+            if (credentials == null)
+                return NotFound();
+
+            if (!confirmed)
             {
-                RequiresConfirmation = true,
-                SubscriptionName = credentials.SubscriptionName,
-                ActiveProjectCount = activeProjects,
-                Message = $"Are you sure you want to delete credentials for subscription '{credentials.SubscriptionName}'? This will affect {activeProjects} active projects.",
-                Warning = activeProjects > 0 ? "Deleting these credentials will prevent Easel from managing resources in the associated projects." : null
-            });
+                var activeProjects = credentials.Projects.Where(p => p.Status == ProjectStatus.Active).Count();
+                
+                return Ok(new CredentialDeleteConfirmationResponse
+                {
+                    RequiresConfirmation = true,
+                    SubscriptionName = credentials.SubscriptionName,
+                    ActiveProjectCount = activeProjects,
+                    Message = $"Are you sure you want to delete credentials for subscription '{credentials.SubscriptionName}'? This will affect {activeProjects} active projects.",
+                    Warning = activeProjects > 0 ? "Deleting these credentials will prevent Easel from managing resources in the associated projects." : null
+                });
+            }
+
+            // User confirmed deletion
+            await _unitOfWork.UserAzureCredentials.DeleteAsync(credentials);
+            await _unitOfWork.SaveChangesAsync();
+
+            return Ok(new { message = "Azure credentials deleted successfully" });
         }
-
-        // User confirmed deletion
-        _context.UserAzureCredentials.Remove(credentials);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = "Azure credentials deleted successfully" });
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting Azure credentials {CredentialId}", id);
+            return StatusCode(500, new { message = "Failed to delete Azure credentials" });
+        }
     }
 }
 
