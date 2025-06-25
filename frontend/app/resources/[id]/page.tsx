@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -50,14 +50,49 @@ import {
   getResourceTypeIcon,
 } from "@/lib/utils";
 import { allMockResourcesData, ResourceData } from "@/lib/mock-resource-data";
+import { isTestUser } from "@/lib/test-user";
 
 export default function ResourceDetailsPage() {
   const params = useParams();
   const resourceId = parseInt(params.id as string, 10);
   const [activeTab, setActiveTab] = useState("overview");
+  const [resource, setResource] = useState<ResourceData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Get the specific resource
-  const resource: ResourceData | undefined = allMockResourcesData[resourceId];
+  useEffect(() => {
+    const fetchResourceData = async () => {
+      try {
+        setLoading(true);
+
+        if (isTestUser()) {
+          // Show mock data for test user
+          const mockResource = allMockResourcesData[resourceId];
+          setResource(mockResource || null);
+        } else {
+          // Fetch real data for other users
+          // TODO: Replace with actual API calls
+          setResource(null);
+        }
+      } catch (error) {
+        console.error("Error fetching resource data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResourceData();
+  }, [resourceId]);
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!resource) {
     return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -38,14 +38,54 @@ import {
   resourceCategories,
   getResourceCategory,
 } from "@/lib/mock-resource-data";
+import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
-
-// Get all resources across all projects
-const allResources: ResourceData[] = Object.values(allMockResourcesData);
 
 export default function ResourcesPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [allResources, setAllResources] = useState<ResourceData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchResourcesData = async () => {
+      try {
+        setLoading(true);
+
+        if (isTestUser()) {
+          // Show mock data for test user
+          const mockResources: ResourceData[] =
+            Object.values(allMockResourcesData);
+          setAllResources(mockResources);
+        } else {
+          // Fetch real data for other users
+          // TODO: Replace with actual API calls
+          setAllResources([]);
+        }
+      } catch (error) {
+        console.error("Error fetching resources data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResourcesData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-64 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Filter resources based on category and search
   const filteredResources = allResources.filter((resource: ResourceData) => {

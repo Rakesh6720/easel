@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -33,16 +33,90 @@ import {
   calculateMonthOverMonthChange,
   getBudgetUtilization,
   getCostOptimizationSavings,
+  type CurrentBill,
+  type BillingPeriod,
+  type CostBreakdownItem,
+  type PaymentMethod,
 } from "@/lib/mock-billing-data";
+import { isTestUser } from "@/lib/test-user";
+
+interface BillingData {
+  currentBill: CurrentBill;
+  billingHistory: BillingPeriod[];
+  costBreakdown: CostBreakdownItem[];
+  paymentMethod: PaymentMethod;
+  threeMonthAvg: number;
+  monthOverMonthChange: number;
+  budgetInfo: {
+    percentage: number;
+    budget: number;
+  };
+  optimizationInfo: {
+    recommendations: number;
+    savings: number;
+  };
+}
 
 export default function BillingPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("current");
+  const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBillingData = async () => {
+      try {
+        setLoading(true);
+
+        if (isTestUser()) {
+          // Show mock data for test user
+          setBillingData({
+            currentBill,
+            billingHistory,
+            costBreakdown,
+            paymentMethod,
+            threeMonthAvg: calculateThreeMonthAverage(),
+            monthOverMonthChange: calculateMonthOverMonthChange(),
+            budgetInfo: getBudgetUtilization(),
+            optimizationInfo: getCostOptimizationSavings(),
+          });
+        } else {
+          // Fetch real data for other users
+          // TODO: Replace with actual API calls
+          setBillingData(null);
+        }
+      } catch (error) {
+        console.error("Error fetching billing data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBillingData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate dynamic values using helper functions
-  const threeMonthAvg = calculateThreeMonthAverage();
-  const monthOverMonthChange = calculateMonthOverMonthChange();
-  const budgetInfo = getBudgetUtilization();
-  const optimizationInfo = getCostOptimizationSavings();
+  const threeMonthAvg = billingData?.threeMonthAvg || 0;
+  const monthOverMonthChange = billingData?.monthOverMonthChange || 0;
+  const budgetInfo = billingData?.budgetInfo || { percentage: 0, budget: 0 };
+  const optimizationInfo = billingData?.optimizationInfo || {
+    recommendations: 0,
+    savings: 0,
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -102,10 +176,11 @@ export default function BillingPage() {
                   Current Bill
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(currentBill.amount)}
+                  {formatCurrency(billingData?.currentBill?.amount || 0)}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Due {formatDate(currentBill.dueDate)}
+                  Due{" "}
+                  {formatDate(billingData?.currentBill?.dueDate || new Date())}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />
@@ -121,7 +196,9 @@ export default function BillingPage() {
                   Last Month
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(billingHistory[0].amount)}
+                  {formatCurrency(
+                    billingData?.billingHistory?.[0]?.amount || 0
+                  )}
                 </p>
                 <p className="text-xs text-green-600 flex items-center">
                   <TrendingUp className="mr-1 h-3 w-3" />
@@ -175,45 +252,51 @@ export default function BillingPage() {
           <CardHeader>
             <CardTitle>Cost Breakdown by Service</CardTitle>
             <CardDescription>
-              Azure resource costs for {currentBill.period}
+              Azure resource costs for{" "}
+              {billingData?.currentBill?.period || "current period"}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {costBreakdown.map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 azure-gradient rounded-full" />
-                    <div>
-                      <p className="font-medium">{item.service}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {item.percentage}% of total
+              {(billingData?.costBreakdown || []).map(
+                (item: any, index: number) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-2 azure-gradient rounded-full" />
+                      <div>
+                        <p className="font-medium">{item.service}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {item.percentage}% of total
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">
+                        {formatCurrency(item.amount)}
                       </p>
+                      <div className="flex items-center text-sm">
+                        {item.trend === "up" ? (
+                          <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
+                        ) : (
+                          <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
+                        )}
+                        <span
+                          className={
+                            item.trend === "up"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
+                          {item.change}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold">
-                      {formatCurrency(item.amount)}
-                    </p>
-                    <div className="flex items-center text-sm">
-                      {item.trend === "up" ? (
-                        <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
-                      ) : (
-                        <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
-                      )}
-                      <span
-                        className={
-                          item.trend === "up"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {item.change}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           </CardContent>
         </Card>
@@ -233,11 +316,12 @@ export default function BillingPage() {
                   </div>
                   <div>
                     <p className="font-medium">
-                      •••• •••• •••• {paymentMethod.last4}
+                      •••• •••• ••••{" "}
+                      {billingData?.paymentMethod?.last4 || "0000"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Expires {paymentMethod.expiryMonth}/
-                      {paymentMethod.expiryYear}
+                      Expires {billingData?.paymentMethod?.expiryMonth || "00"}/
+                      {billingData?.paymentMethod?.expiryYear || "00"}
                     </p>
                   </div>
                 </div>
@@ -298,19 +382,28 @@ export default function BillingPage() {
                   <FileText className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="font-medium">{currentBill.period}</p>
+                  <p className="font-medium">
+                    {billingData?.currentBill?.period || "Current Period"}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    Due {formatDate(currentBill.dueDate)}
+                    Due{" "}
+                    {formatDate(
+                      billingData?.currentBill?.dueDate || new Date()
+                    )}
                   </p>
                 </div>
               </div>
               <div className="flex items-center space-x-4">
                 <div className="text-right">
                   <p className="font-semibold">
-                    {formatCurrency(currentBill.amount)}
+                    {formatCurrency(billingData?.currentBill?.amount || 0)}
                   </p>
-                  <Badge className={getStatusColor(currentBill.status)}>
-                    {currentBill.status}
+                  <Badge
+                    className={getStatusColor(
+                      billingData?.currentBill?.status || "pending"
+                    )}
+                  >
+                    {billingData?.currentBill?.status || "pending"}
                   </Badge>
                 </div>
                 <Button variant="outline" size="sm">
@@ -321,7 +414,7 @@ export default function BillingPage() {
             </div>
 
             {/* Historical Bills */}
-            {billingHistory.map((bill) => (
+            {(billingData?.billingHistory || []).map((bill: any) => (
               <div
                 key={bill.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -37,10 +37,64 @@ import {
   type ProjectPerformance,
   type CostTrend,
 } from "@/lib/mock-analytics-data";
+import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 
 export default function AnalyticsPage() {
   const [selectedTimeRange, setSelectedTimeRange] = useState("30d");
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
+  const [resourceUtilization, setResourceUtilization] = useState<
+    ResourceUtilization[]
+  >([]);
+  const [projectPerformance, setProjectPerformance] = useState<
+    ProjectPerformance[]
+  >([]);
+  const [costTrends, setCostTrends] = useState<CostTrend[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAnalyticsData = async () => {
+      try {
+        setLoading(true);
+
+        if (isTestUser()) {
+          // Show mock data for test user
+          setOverview(mockAnalyticsOverview);
+          setResourceUtilization(mockResourceUtilization);
+          setProjectPerformance(mockProjectPerformance);
+          setCostTrends(mockCostTrends);
+        } else {
+          // Fetch real data for other users
+          // TODO: Replace with actual API calls
+          setOverview(null);
+          setResourceUtilization([]);
+          setProjectPerformance([]);
+          setCostTrends([]);
+        }
+      } catch (error) {
+        console.error("Error fetching analytics data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalyticsData();
+  }, [selectedTimeRange]);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -106,7 +160,7 @@ export default function AnalyticsPage() {
                   Total Resources
                 </p>
                 <p className="text-2xl font-bold">
-                  {mockAnalyticsOverview.totalResources}
+                  {overview?.totalResources || 0}
                 </p>
               </div>
               <BarChart3 className="h-8 w-8 text-muted-foreground" />
@@ -122,7 +176,7 @@ export default function AnalyticsPage() {
                   Active Projects
                 </p>
                 <p className="text-2xl font-bold">
-                  {mockAnalyticsOverview.activeProjects}
+                  {overview?.activeProjects || 0}
                 </p>
               </div>
               <Users className="h-8 w-8 text-muted-foreground" />
@@ -138,7 +192,7 @@ export default function AnalyticsPage() {
                   Monthly Spend
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(mockAnalyticsOverview.monthlySpend)}
+                  {formatCurrency(overview?.monthlySpend || 0)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />
@@ -154,7 +208,7 @@ export default function AnalyticsPage() {
                   Utilization
                 </p>
                 <p className="text-2xl font-bold">
-                  {mockAnalyticsOverview.utilizationRate}%
+                  {overview?.utilizationRate || 0}%
                 </p>
               </div>
               <Activity className="h-8 w-8 text-muted-foreground" />
@@ -170,7 +224,7 @@ export default function AnalyticsPage() {
                   Growth Rate
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  +{mockAnalyticsOverview.growthRate}%
+                  +{overview?.growthRate || 0}%
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-muted-foreground" />
@@ -186,7 +240,7 @@ export default function AnalyticsPage() {
                   Active Alerts
                 </p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {mockAnalyticsOverview.alertsActive}
+                  {overview?.alertsActive || 0}
                 </p>
               </div>
               <Clock className="h-8 w-8 text-muted-foreground" />
@@ -206,7 +260,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {mockResourceUtilization.map((category, index) => (
+              {resourceUtilization.map((category, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -264,9 +318,9 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="space-y-4">
               <div className="h-48 flex items-end justify-between bg-muted/20 p-4 rounded">
-                {mockCostTrends.map((trend, index) => {
+                {costTrends.map((trend, index) => {
                   const maxAmount = Math.max(
-                    ...mockCostTrends.map((t) => t.amount)
+                    ...costTrends.map((t) => t.amount)
                   );
                   const height = (trend.amount / maxAmount) * 150;
                   return (
@@ -286,7 +340,7 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-muted-foreground">
                   Current month:{" "}
                   {formatCurrency(
-                    mockCostTrends[mockCostTrends.length - 1].amount
+                    costTrends[costTrends.length - 1]?.amount || 0
                   )}
                 </p>
               </div>
@@ -305,7 +359,7 @@ export default function AnalyticsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockProjectPerformance.map((project) => (
+            {projectPerformance.map((project) => (
               <div
                 key={project.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"

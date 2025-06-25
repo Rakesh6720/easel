@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import { isTestUser } from "@/lib/test-user";
 
 // Notification types
 export interface Notification {
@@ -115,8 +122,18 @@ export function NotificationProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [notifications, setNotifications] =
-    useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    // Load notifications based on user type
+    if (isTestUser()) {
+      setNotifications(mockNotifications);
+    } else {
+      // For real users, start with empty notifications
+      // TODO: Load from API
+      setNotifications([]);
+    }
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 

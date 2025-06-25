@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -28,9 +29,56 @@ import {
   type RecentProject,
   type ResourceType,
 } from "@/lib/mock-dashboard-data";
+import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<DashboardStat[]>([]);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  const [resourceTypes, setResourceTypes] = useState<ResourceType[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+
+        if (isTestUser()) {
+          // Show mock data for test user
+          setStats(mockDashboardStats);
+          setRecentProjects(mockRecentProjects);
+          setResourceTypes(mockResourceTypes);
+        } else {
+          // Fetch real data for other users
+          // TODO: Replace with actual API calls
+          setStats([]);
+          setRecentProjects([]);
+          setResourceTypes([]);
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="p-6 space-y-6">
       {/* Page Header */}
@@ -51,7 +99,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {mockDashboardStats.map((stat) => (
+        {stats.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -94,7 +142,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockRecentProjects.map((project) => (
+              {recentProjects.map((project) => (
                 <div
                   key={project.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
@@ -144,7 +192,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockResourceTypes.map((type) => (
+              {resourceTypes.map((type) => (
                 <div
                   key={type.name}
                   className="flex items-center justify-between"
