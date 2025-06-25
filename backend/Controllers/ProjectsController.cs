@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using backend.Models;
 using backend.Services;
-using backend.Data;
-using Microsoft.EntityFrameworkCore;
+using backend.Repositories;
 
 namespace backend.Controllers;
 
@@ -10,18 +9,18 @@ namespace backend.Controllers;
 [Route("api/[controller]")]
 public class ProjectsController : ControllerBase
 {
-    private readonly EaselDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly IRequirementAnalysisService _requirementAnalysisService;
     private readonly IAzureResourceService _azureResourceService;
     private readonly ILogger<ProjectsController> _logger;
 
     public ProjectsController(
-        EaselDbContext context,
+        IUnitOfWork unitOfWork,
         IRequirementAnalysisService requirementAnalysisService,
         IAzureResourceService azureResourceService,
         ILogger<ProjectsController> logger)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
         _requirementAnalysisService = requirementAnalysisService;
         _azureResourceService = azureResourceService;
         _logger = logger;
@@ -30,27 +29,39 @@ public class ProjectsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<Project>>> GetProjects()
     {
-        var projects = await _context.Projects
-            .Include(p => p.Resources)
-            .OrderByDescending(p => p.UpdatedAt)
-            .ToListAsync();
-
-        return Ok(projects);
+        try
+        {
+            var projects = await _unitOfWork.Projects.GetAllWithIncludesAsync(p => p.Resources);
+            var sortedProjects = projects.OrderByDescending(p => p.UpdatedAt).ToList();
+            return Ok(sortedProjects);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving projects");
+            return StatusCode(500, "An error occurred while retrieving projects");
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Project>> GetProject(int id)
     {
-        var project = await _context.Projects
-            .Include(p => p.Resources)
-            .Include(p => p.Conversations)
-            .Include(p => p.UserAzureCredential)
-            .FirstOrDefaultAsync(p => p.Id == id);
+        try
+        {
+            var project = await _unitOfWork.Projects.GetByIdWithIncludesAsync(id,
+                p => p.Resources,
+                p => p.Conversations,
+                p => p.UserAzureCredential);
 
-        if (project == null)
-            return NotFound();
+            if (project == null)
+                return NotFound();
 
-        return Ok(project);
+            return Ok(project);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while retrieving the project");
+        }
     }
 
     [HttpPost]
@@ -93,12 +104,21 @@ public class ProjectsController : ControllerBase
     [HttpGet("{id}/conversations")]
     public async Task<ActionResult<List<ProjectConversation>>> GetConversations(int id)
     {
-        var conversations = await _context.ProjectConversations
-            .Where(c => c.ProjectId == id)
-            .OrderBy(c => c.CreatedAt)
-            .ToListAsync();
+        try
+        {
+            // Validate project exists
+            var project = await _unitOfWork.Projects.GetByIdAsync(id);
+            if (project == null)
+                return NotFound();
 
-        return Ok(conversations);
+            var conversations = await _unitOfWork.GetProjectConversationsAsync(id);
+            return Ok(conversations.OrderBy(c => c.CreatedAt).ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving conversations for project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while retrieving conversations");
+        }
     }
 
     [HttpPost("{id}/generate-recommendations")]
@@ -142,66 +162,107 @@ public class ProjectsController : ControllerBase
     [HttpGet("{id}/resources")]
     public async Task<ActionResult<List<AzureResource>>> GetProjectResources(int id)
     {
-        var resources = await _azureResourceService.GetProjectResourcesAsync(id);
-        return Ok(resources);
+        try
+        {
+            // Validate project exists using repository
+            var project = await _unitOfWork.Projects.GetByIdAsync(id);
+            if (project == null)
+                return NotFound();
+
+            var resources = await _azureResourceService.GetProjectResourcesAsync(id);
+            return Ok(resources);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving resources for project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while retrieving project resources");
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateProject(int id, UpdateProjectRequest request)
     {
-        var project = await _context.Projects.FindAsync(id);
-        if (project == null)
-            return NotFound();
+        try
+        {
+            var project = await _unitOfWork.Projects.GetByIdAsync(id);
+            if (project == null)
+                return NotFound();
 
-        project.Name = request.Name ?? project.Name;
-        project.Description = request.Description ?? project.Description;
-        project.UpdatedAt = DateTime.UtcNow;
+            project.Name = request.Name ?? project.Name;
+            project.Description = request.Description ?? project.Description;
+            project.UpdatedAt = DateTime.UtcNow;
 
-        await _context.SaveChangesAsync();
-        return NoContent();
+            await _unitOfWork.Projects.UpdateAsync(project);
+            await _unitOfWork.SaveChangesAsync();
+            
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while updating the project");
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteProject(int id, [FromQuery] bool confirmed = false)
     {
-        var project = await _context.Projects
-            .Include(p => p.Resources)
-            .FirstOrDefaultAsync(p => p.Id == id);
-
-        if (project == null)
-            return NotFound();
-
-        if (!confirmed)
+        try
         {
-            var activeResources = project.Resources.Where(r => r.Status == ResourceStatus.Active).ToList();
-            
-            return Ok(new DeleteConfirmationResponse
+            var project = await _unitOfWork.Projects.GetByIdWithIncludesAsync(id, p => p.Resources);
+
+            if (project == null)
+                return NotFound();
+
+            if (!confirmed)
             {
-                RequiresConfirmation = true,
-                ProjectName = project.Name,
-                ActiveResourceCount = activeResources.Count,
-                ActiveResources = activeResources.Select(r => new ResourceSummary
+                var activeResources = project.Resources.Where(r => r.Status == ResourceStatus.Active).ToList();
+                
+                return Ok(new DeleteConfirmationResponse
                 {
-                    Id = r.Id,
-                    Name = r.Name,
-                    ResourceType = r.ResourceType,
-                    EstimatedMonthlyCost = r.EstimatedMonthlyCost
-                }).ToList(),
-                Message = $"Are you sure you want to delete project '{project.Name}'? This will delete {activeResources.Count} active Azure resources in your subscription.",
-                EstimatedMonthlySavings = activeResources.Sum(r => r.EstimatedMonthlyCost)
-            });
-        }
+                    RequiresConfirmation = true,
+                    ProjectName = project.Name,
+                    ActiveResourceCount = activeResources.Count,
+                    ActiveResources = activeResources.Select(r => new ResourceSummary
+                    {
+                        Id = r.Id,
+                        Name = r.Name,
+                        ResourceType = r.ResourceType,
+                        EstimatedMonthlyCost = r.EstimatedMonthlyCost
+                    }).ToList(),
+                    Message = $"Are you sure you want to delete project '{project.Name}'? This will delete {activeResources.Count} active Azure resources in your subscription.",
+                    EstimatedMonthlySavings = activeResources.Sum(r => r.EstimatedMonthlyCost)
+                });
+            }
 
-        // User has confirmed deletion
-        foreach (var resource in project.Resources.Where(r => r.Status == ResourceStatus.Active))
+            // User has confirmed deletion - use transaction
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                // Delete Azure resources first
+                foreach (var resource in project.Resources.Where(r => r.Status == ResourceStatus.Active))
+                {
+                    await _azureResourceService.DeleteResourceAsync(resource.Id, true);
+                }
+
+                // Delete project using repository
+                await _unitOfWork.Projects.DeleteAsync(project);
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                return Ok(new { message = $"Project '{project.Name}' and its resources have been deleted successfully." });
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
         {
-            await _azureResourceService.DeleteResourceAsync(resource.Id, true);
+            _logger.LogError(ex, "Error deleting project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while deleting the project");
         }
-
-        _context.Projects.Remove(project);
-        await _context.SaveChangesAsync();
-
-        return Ok(new { message = $"Project '{project.Name}' and its resources have been deleted successfully." });
     }
 }
 
@@ -210,49 +271,58 @@ public class ProjectsController : ControllerBase
 public class ResourcesController : ControllerBase
 {
     private readonly IAzureResourceService _azureResourceService;
-    private readonly EaselDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<ResourcesController> _logger;
 
     public ResourcesController(
         IAzureResourceService azureResourceService,
-        EaselDbContext context,
+        IUnitOfWork unitOfWork,
         ILogger<ResourcesController> logger)
     {
         _azureResourceService = azureResourceService;
-        _context = context;
+        _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteResource(int id, [FromQuery] bool confirmed = false)
     {
-        var resource = await _context.AzureResources.FindAsync(id);
-        if (resource == null)
-            return NotFound();
-
-        if (!confirmed)
+        try
         {
-            return Ok(new ResourceDeleteConfirmationResponse
-            {
-                RequiresConfirmation = true,
-                ResourceName = resource.Name,
-                ResourceType = resource.ResourceType,
-                EstimatedMonthlyCost = resource.EstimatedMonthlyCost,
-                Message = $"Are you sure you want to delete the Azure resource '{resource.Name}' ({resource.ResourceType})? This action cannot be undone.",
-                Warning = "Deleting this resource will permanently remove it from your Azure subscription and may cause downtime for your application."
-            });
-        }
+            var resource = await _unitOfWork.AzureResources.GetByIdAsync(id);
+            if (resource == null)
+                return NotFound();
 
-        // User has confirmed deletion
-        var result = await _azureResourceService.DeleteResourceAsync(id, true);
-        
-        if (result.Success)
-            return Ok(new { message = result.Message });
-        else
-            return BadRequest(result.Message);
+            if (!confirmed)
+            {
+                return Ok(new ResourceDeleteConfirmationResponse
+                {
+                    RequiresConfirmation = true,
+                    ResourceName = resource.Name,
+                    ResourceType = resource.ResourceType,
+                    EstimatedMonthlyCost = resource.EstimatedMonthlyCost,
+                    Message = $"Are you sure you want to delete the Azure resource '{resource.Name}' ({resource.ResourceType})? This action cannot be undone.",
+                    Warning = "Deleting this resource will permanently remove it from your Azure subscription and may cause downtime for your application."
+                });
+            }
+
+            // User has confirmed deletion
+            var result = await _azureResourceService.DeleteResourceAsync(id, true);
+            
+            if (result.Success)
+                return Ok(new { message = result.Message });
+            else
+                return BadRequest(result.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting resource {ResourceId}", id);
+            return StatusCode(500, "An error occurred while deleting the resource");
+        }
     }
 }
 
+// DTO Classes remain the same
 public class CreateProjectRequest
 {
     public string Name { get; set; } = string.Empty;

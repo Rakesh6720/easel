@@ -126,7 +126,7 @@ public class UnitOfWork : IUnitOfWork
 
     public async Task<IEnumerable<ProjectConversation>> GetProjectConversationsAsync(int projectId, int? limit = null)
     {
-        var query = _context.ProjectConversations
+        IQueryable<ProjectConversation> query = _context.ProjectConversations
             .Where(c => c.ProjectId == projectId)
             .OrderByDescending(c => c.CreatedAt);
 

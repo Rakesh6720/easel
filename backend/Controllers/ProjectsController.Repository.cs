@@ -190,7 +190,7 @@ public class ProjectsRepositoryController : ControllerBase
             }
 
             // Analyze requirements using the service
-            var processedRequirements = await _requirementAnalysisService.AnalyzeRequirementsAsync(project.UserRequirements);
+            var processedRequirements = await _requirementAnalysisService.ProcessConversationAsync(project.Id, project.UserRequirements);
             
             // Update project
             project.ProcessedRequirements = processedRequirements;
