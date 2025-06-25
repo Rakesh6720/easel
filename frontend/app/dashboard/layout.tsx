@@ -3,6 +3,7 @@
 import { Header } from "@/components/dashboard/header";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { AuthenticatedLayout } from "@/components/layout/authenticated-layout";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,8 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <div className="flex h-screen bg-background">
+      <AuthenticatedLayout>
+        <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <aside
           className={cn(
@@ -39,7 +41,8 @@ export default function DashboardLayout({
           <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
-      </div>
+        </div>
+      </AuthenticatedLayout>
     </ProtectedRoute>
   );
 }

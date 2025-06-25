@@ -3,6 +3,7 @@
 import { AuthProvider } from "@/contexts/auth-context"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Header } from "@/components/dashboard/header"
+import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
 import { useState } from "react"
 
 export default function SettingsLayout({
@@ -14,7 +15,8 @@ export default function SettingsLayout({
 
   return (
     <AuthProvider>
-      <div className="flex h-screen bg-gray-50">
+      <AuthenticatedLayout>
+        <div className="flex h-screen bg-gray-50">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -24,7 +26,8 @@ export default function SettingsLayout({
             {children}
           </main>
         </div>
-      </div>
+        </div>
+      </AuthenticatedLayout>
     </AuthProvider>
   )
 }
