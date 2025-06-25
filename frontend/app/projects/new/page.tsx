@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { azureService, AzureCredential } from "@/lib/azure"
+import { projectsService } from "@/lib/projects"
 
 interface ProjectData {
   name: string
@@ -74,29 +75,11 @@ export default function NewProjectPage() {
     setIsAnalyzing(true)
     
     try {
-      // Actually create the project via API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/projects`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: projectData.name,
-          userRequirements: projectData.requirements,
-          azureCredentialId: projectData.azureCredentialId
-        })
+      // Create the project via API service
+      const project = await projectsService.createProject({
+        name: projectData.name,
+        userRequirements: projectData.requirements
       })
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          window.location.href = '/login'
-          return
-        }
-        throw new Error('Failed to create project')
-      }
-
-      const project = await response.json()
       
       // Use the real project data
       setAnalysisResult(`Based on your requirements for "${project.name}", I've analyzed the following:

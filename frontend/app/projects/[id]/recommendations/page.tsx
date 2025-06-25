@@ -67,7 +67,7 @@ export default function RecommendationsPage() {
     setError(null)
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/projects/${params.id}/generate-recommendations`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/projects/${params.id}/generate-recommendations`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
@@ -117,7 +117,7 @@ export default function RecommendationsPage() {
     try {
       const selectedRecommendations = recommendations.filter(r => selectedResources.includes(r.id))
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/projects/${params.id}/provision`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'}/projects/${params.id}/provision`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,

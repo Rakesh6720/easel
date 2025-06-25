@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -23,11 +23,7 @@ import {
   Server,
 } from "lucide-react";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
-import {
-  mockProjects,
-  searchProjects,
-  type Project,
-} from "@/lib/mock-project-data";
+import { projectsService, type Project } from "@/lib/projects";
 import Link from "next/link";
 
 const getStatusIcon = (status: string) => {
@@ -47,11 +43,43 @@ const getStatusIcon = (status: string) => {
 
 export default function ProjectsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        setLoading(true);
+        const fetchedProjects = await projectsService.getProjects();
+        setProjects(fetchedProjects);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load projects');
+        console.error('Error fetching projects:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
 
   // Filter projects based on search term
   const filteredProjects = useMemo(() => {
-    return searchProjects(mockProjects, searchTerm);
-  }, [searchTerm]);
+    if (!searchTerm.trim()) {
+      return projects;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    return projects.filter(
+      (project) =>
+        project.name.toLowerCase().includes(searchLower) ||
+        project.description.toLowerCase().includes(searchLower) ||
+        project.userRequirements.toLowerCase().includes(searchLower) ||
+        project.status.toLowerCase().includes(searchLower)
+    );
+  }, [projects, searchTerm]);
 
   return (
     <div className="p-6 space-y-6">
@@ -94,15 +122,44 @@ export default function ProjectsPage() {
             <div className="mt-4 text-sm text-muted-foreground">
               {filteredProjects.length === 0
                 ? "No projects found matching your search"
-                : `Showing ${filteredProjects.length} of ${mockProjects.length} projects`}
+                : `Showing ${filteredProjects.length} of ${projects.length} projects`}
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Projects Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProjects.map((project) => (
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-azure-blue mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading projects...</p>
+          </div>
+        </div>
+      ) : error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-red-500 mb-4">{error}</p>
+            <Button onClick={() => window.location.reload()}>Try Again</Button>
+          </CardContent>
+        </Card>
+      ) : filteredProjects.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <p className="text-muted-foreground mb-4">
+              {searchTerm ? 'No projects found matching your search' : 'No projects yet'}
+            </p>
+            <Button variant="azure" asChild>
+              <Link href="/projects/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Your First Project
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {filteredProjects.map((project) => (
           <Card
             key={project.id}
             className="hover:shadow-lg transition-shadow cursor-pointer group"
@@ -151,13 +208,15 @@ export default function ProjectsPage() {
                   <div className="flex items-center space-x-2">
                     <Server className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
-                      {project.resourceCount} resources
+                      {project.resources?.length || 0} resources
                     </span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm">
-                      {formatCurrency(project.monthlyCost)}/mo
+                      {formatCurrency(
+                        project.resources?.reduce((sum, r) => sum + (r.estimatedMonthlyCost || 0), 0) || 0
+                      )}/mo
                     </span>
                   </div>
                 </div>
@@ -168,7 +227,7 @@ export default function ProjectsPage() {
                     <Calendar className="h-3 w-3" />
                     <span>Created {formatDate(project.createdAt)}</span>
                   </div>
-                  <div>Updated {formatDate(project.lastUpdated)}</div>
+                  <div>Updated {formatDate(project.updatedAt)}</div>
                 </div>
 
                 {/* Actions */}
@@ -192,34 +251,8 @@ export default function ProjectsPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
-
-      {/* Empty State - shown when no projects match filters */}
-      {filteredProjects.length === 0 && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <div className="mx-auto w-16 h-16 azure-gradient-subtle rounded-full flex items-center justify-center mb-4">
-              <Plus className="h-8 w-8 text-azure-blue" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">
-              {searchTerm ? "No projects found" : "No projects yet"}
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              {searchTerm
-                ? `No projects match "${searchTerm}". Try adjusting your search terms.`
-                : "Get started by creating your first AI-powered Azure project"}
-            </p>
-            {!searchTerm && (
-              <Button variant="azure" asChild>
-                <Link href="/projects/new">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Your First Project
-                </Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       )}
     </div>
   );
