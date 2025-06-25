@@ -1,5 +1,7 @@
 using backend.Data;
 using backend.Services;
+using backend.Repositories;
+using backend.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -13,9 +15,12 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database
-builder.Services.AddDbContext<EaselDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Database - Use the new configuration system
+builder.Services.AddDatabaseContext(builder.Configuration);
+
+// Repository pattern
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
 
 // Azure services
 builder.Services.AddSingleton<DefaultAzureCredential>();
@@ -73,11 +78,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<EaselDbContext>();
-    context.Database.EnsureCreated();
-}
+// Ensure database is created and migrated
+await app.Services.EnsureDatabaseAsync();
 
 app.Run();
