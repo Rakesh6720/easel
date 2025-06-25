@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { Menu, Sun, Moon, LogOut, User, Settings } from "lucide-react";
 import { GlobalSearch } from "@/components/ui/global-search";
 import { NotificationDropdown } from "@/components/ui/notification-dropdown";
@@ -86,12 +87,15 @@ export function Header({ onMenuClick }: HeaderProps) {
           {/* User menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                <div className="w-8 h-8 bg-azure-blue rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {user?.firstName?.charAt(0)?.toUpperCase() || "U"}
-                  </span>
-                </div>
+              <Button
+                variant="ghost"
+                className="relative h-10 w-10 rounded-full p-0"
+              >
+                <UserAvatar
+                  firstName={user?.firstName}
+                  lastName={user?.lastName}
+                  size="md"
+                />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>

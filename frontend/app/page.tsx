@@ -1,13 +1,20 @@
-"use client"
+"use client";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowRight, Cloud, Zap, Shield, BarChart3 } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import Link from "next/link"
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { UserAvatar } from "@/components/ui/user-avatar";
+import { ArrowRight, Cloud, Zap, Shield, BarChart3 } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import Link from "next/link";
 
 function AuthenticatedNav() {
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated, user } = useAuth();
 
   if (isAuthenticated) {
     return (
@@ -16,17 +23,17 @@ function AuthenticatedNav() {
           <Link href="/dashboard">Dashboard</Link>
         </Button>
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-azure-blue rounded-full flex items-center justify-center">
-            <span className="text-white text-sm font-medium">
-              {user?.firstName?.charAt(0)?.toUpperCase() || 'U'}
-            </span>
-          </div>
+          <UserAvatar
+            firstName={user?.firstName}
+            lastName={user?.lastName}
+            size="md"
+          />
           <span className="text-sm text-muted-foreground">
             {user?.firstName}
           </span>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -38,7 +45,7 @@ function AuthenticatedNav() {
         <Link href="/register">Get Started</Link>
       </Button>
     </div>
-  )
+  );
 }
 
 export default function Home() {
@@ -64,8 +71,9 @@ export default function Home() {
             AI-Powered Azure Resource Management
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-            Tell us what you want to build, and Easel will analyze your requirements, 
-            recommend the perfect Azure resources, and provision them in your subscription.
+            Tell us what you want to build, and Easel will analyze your
+            requirements, recommend the perfect Azure resources, and provision
+            them in your subscription.
           </p>
           <div className="flex items-center justify-center space-x-4">
             <Button size="lg" variant="azure" asChild>
@@ -88,7 +96,8 @@ export default function Home() {
             Everything you need to manage Azure resources
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            From natural language requirements to production-ready infrastructure
+            From natural language requirements to production-ready
+            infrastructure
           </p>
         </div>
 
@@ -102,7 +111,8 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Describe your application in natural language and get smart Azure resource recommendations
+                Describe your application in natural language and get smart
+                Azure resource recommendations
               </CardDescription>
             </CardContent>
           </Card>
@@ -116,7 +126,8 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Automatically provision resources in your Azure subscription with best practices
+                Automatically provision resources in your Azure subscription
+                with best practices
               </CardDescription>
             </CardContent>
           </Card>
@@ -130,7 +141,8 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Monitor costs, performance metrics, and resource utilization in real-time
+                Monitor costs, performance metrics, and resource utilization in
+                real-time
               </CardDescription>
             </CardContent>
           </Card>
@@ -144,7 +156,8 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Uses your Azure credentials securely. Resources are created in your subscription
+                Uses your Azure credentials securely. Resources are created in
+                your subscription
               </CardDescription>
             </CardContent>
           </Card>
@@ -159,7 +172,8 @@ export default function Home() {
               Ready to simplify your Azure workflow?
             </h2>
             <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-              Join developers who are building faster with AI-powered infrastructure management
+              Join developers who are building faster with AI-powered
+              infrastructure management
             </p>
             <Button size="lg" variant="azure" asChild>
               <Link href="/projects/new">
@@ -186,5 +200,5 @@ export default function Home() {
         </div>
       </footer>
     </div>
-  )
+  );
 }

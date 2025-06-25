@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { useAuth } from "@/contexts/auth-context";
 import {
   Home,
@@ -91,11 +92,11 @@ export function Sidebar({ className, onNavigate }: SidebarProps) {
         {/* User Section */}
         <div className="px-3 py-2 border-t">
           <div className="flex items-center space-x-3 p-2">
-            <div className="w-8 h-8 bg-azure-blue rounded-full flex items-center justify-center">
-              <span className="text-white text-xs font-medium">
-                {useAuth().user?.firstName?.charAt(0)?.toUpperCase() || "U"}
-              </span>
-            </div>
+            <UserAvatar
+              firstName={useAuth().user?.firstName}
+              lastName={useAuth().user?.lastName}
+              size="md"
+            />
             <div className="flex-1">
               <p className="text-sm font-medium">
                 {useAuth().user?.firstName} {useAuth().user?.lastName}
