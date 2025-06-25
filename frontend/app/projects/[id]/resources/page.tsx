@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -22,14 +22,65 @@ import {
 } from "@/components/ui/dialog";
 import { Settings, ExternalLink } from "lucide-react";
 import { getResourcesForProject } from "@/lib/mock-resource-data";
+import { projectsService, type AzureResource } from "@/lib/projects";
+import { isTestUser } from "@/lib/test-user";
 
 export default function ProjectResourcesPage() {
   const params = useParams();
-  const projectId = params.id as string;
+  const projectId = parseInt(params.id as string, 10);
   const [selectedResource, setSelectedResource] = useState<any>(null);
+  const [resources, setResources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get resources for this project
-  const resources = getResourcesForProject(parseInt(projectId, 10));
+  useEffect(() => {
+    const fetchResources = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (isTestUser()) {
+          // Use mock data for test user
+          const mockResources = getResourcesForProject(projectId);
+          setResources(mockResources);
+        } else {
+          // Fetch real data for other users
+          const project = await projectsService.getProject(projectId);
+          if (project?.resources) {
+            // Convert API resources to the expected format for the UI
+            const formattedResources = project.resources.map(
+              (resource: AzureResource) => ({
+                id: resource.id,
+                name: resource.name,
+                type: resource.resourceType,
+                status: resource.status || "unknown",
+                region: resource.location || "Unknown",
+                resourceGroup: "default-rg", // Not available in API, use default
+                createdAt: resource.createdAt || new Date().toISOString(),
+                cost: resource.estimatedMonthlyCost || 0,
+                azureResourceId: "", // Not available in API
+                configuration: resource.configuration || {},
+              })
+            );
+            setResources(formattedResources);
+          } else {
+            setResources([]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching resources:", error);
+        setError("Failed to load resources");
+        setResources([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResources();
+  }, [projectId]);
+
+  // Get resources for this project - this is now set by useEffect
+  // const resources = getResourcesForProject(parseInt(projectId, 10));
 
   const handleConfigure = (resource: any) => {
     setSelectedResource(resource);
@@ -203,7 +254,27 @@ export default function ProjectResourcesPage() {
         </Button>
       </div>
 
-      {resources.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-center">
+              <p className="text-muted-foreground">Loading resources...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold mb-2 text-red-600">Error</h3>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : resources.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-center">
