@@ -21,7 +21,7 @@ public class RequirementAnalysisService : IRequirementAnalysisService
         _logger = logger;
     }
 
-    public async Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName)
+    public async Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName, int userId)
     {
         try
         {
@@ -35,6 +35,7 @@ public class RequirementAnalysisService : IRequirementAnalysisService
                 UserRequirements = userRequirements,
                 ProcessedRequirements = processedRequirements,
                 Status = ProjectStatus.Analyzing,
+                UserId = userId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

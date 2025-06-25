@@ -1,12 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using backend.Models;
 using backend.Services;
 using backend.Repositories;
+using System.Security.Claims;
 
 namespace backend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ProjectsController : ControllerBase
 {
     private readonly IUnitOfWork _unitOfWork;
@@ -26,12 +29,23 @@ public class ProjectsController : ControllerBase
         _logger = logger;
     }
 
+    private int GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst("userId")?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+        {
+            throw new UnauthorizedAccessException("Invalid user ID in token");
+        }
+        return userId;
+    }
+
     [HttpGet]
     public async Task<ActionResult<List<Project>>> GetProjects()
     {
         try
         {
-            var projects = await _unitOfWork.Projects.GetAllWithIncludesAsync(p => p.Resources);
+            var userId = GetCurrentUserId();
+            var projects = await _unitOfWork.GetUserProjectsAsync(userId);
             var sortedProjects = projects.OrderByDescending(p => p.UpdatedAt).ToList();
             return Ok(sortedProjects);
         }
@@ -47,12 +61,13 @@ public class ProjectsController : ControllerBase
     {
         try
         {
+            var userId = GetCurrentUserId();
             var project = await _unitOfWork.Projects.GetByIdWithIncludesAsync(id,
                 p => p.Resources,
                 p => p.Conversations,
                 p => p.UserAzureCredential);
 
-            if (project == null)
+            if (project == null || project.UserId != userId)
                 return NotFound();
 
             return Ok(project);
@@ -69,9 +84,11 @@ public class ProjectsController : ControllerBase
     {
         try
         {
+            var userId = GetCurrentUserId();
             var project = await _requirementAnalysisService.CreateProjectFromRequirementsAsync(
                 request.UserRequirements, 
-                request.Name);
+                request.Name,
+                userId);
 
             return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
         }
