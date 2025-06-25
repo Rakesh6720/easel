@@ -32,36 +32,16 @@ import {
   getStatusColor,
   getResourceTypeIcon,
 } from "@/lib/utils";
-import { allMockResourcesData, ResourceData } from "@/lib/mock-resource-data";
+import { 
+  allMockResourcesData, 
+  ResourceData, 
+  resourceCategories, 
+  getResourceCategory 
+} from "@/lib/mock-resource-data";
 import Link from "next/link";
 
 // Get all resources across all projects
 const allResources: ResourceData[] = Object.values(allMockResourcesData);
-
-// Resource categories for filtering
-const resourceCategories = [
-  { name: "All", value: "all", icon: Cloud },
-  { name: "Compute", value: "compute", icon: Server },
-  { name: "Database", value: "database", icon: Database },
-  { name: "Storage", value: "storage", icon: HardDrive },
-  { name: "Networking", value: "networking", icon: Network },
-];
-
-// Resource type mapping to categories
-const getResourceCategory = (resourceType: string): string => {
-  if (resourceType.includes("web/sites") || resourceType.includes("functions"))
-    return "compute";
-  if (
-    resourceType.includes("sql") ||
-    resourceType.includes("cosmos") ||
-    resourceType.includes("documentdb")
-  )
-    return "database";
-  if (resourceType.includes("storage")) return "storage";
-  if (resourceType.includes("network") || resourceType.includes("cdn"))
-    return "networking";
-  return "other";
-};
 
 export default function ResourcesPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");

@@ -1,6 +1,33 @@
 // Dynamic resource data based on resource type and ID
 // This provides specific data for each Azure resource type
 
+import { Cloud, Server, Database, HardDrive, Network } from "lucide-react";
+
+// Resource categories for filtering
+export const resourceCategories = [
+  { name: "All", value: "all", icon: Cloud },
+  { name: "Compute", value: "compute", icon: Server },
+  { name: "Database", value: "database", icon: Database },
+  { name: "Storage", value: "storage", icon: HardDrive },
+  { name: "Networking", value: "networking", icon: Network },
+];
+
+// Resource type mapping to categories
+export const getResourceCategory = (resourceType: string): string => {
+  if (resourceType.includes("web/sites") || resourceType.includes("functions"))
+    return "compute";
+  if (
+    resourceType.includes("sql") ||
+    resourceType.includes("cosmos") ||
+    resourceType.includes("documentdb")
+  )
+    return "database";
+  if (resourceType.includes("storage")) return "storage";
+  if (resourceType.includes("network") || resourceType.includes("cdn"))
+    return "networking";
+  return "compute"; // Default fallback
+};
+
 export interface ResourceData {
   id: number;
   name: string;

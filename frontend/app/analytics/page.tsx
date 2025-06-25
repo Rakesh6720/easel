@@ -27,90 +27,17 @@ import {
   LineChart,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  mockAnalyticsOverview,
+  mockResourceUtilization,
+  mockProjectPerformance,
+  mockCostTrends,
+  type AnalyticsOverview,
+  type ResourceUtilization,
+  type ProjectPerformance,
+  type CostTrend
+} from "@/lib/mock-analytics-data";
 import Link from "next/link";
-
-// Mock analytics data
-const analyticsOverview = {
-  totalResources: 24,
-  activeProjects: 8,
-  monthlySpend: 3247.83,
-  utilizationRate: 78.5,
-  growthRate: 15.2,
-  alertsActive: 3,
-};
-
-const resourceUtilization = [
-  {
-    category: "Compute",
-    totalResources: 12,
-    utilizationRate: 82.3,
-    trend: "up",
-    change: "+5.2%",
-    cost: 1456.78,
-  },
-  {
-    category: "Storage",
-    totalResources: 8,
-    utilizationRate: 65.1,
-    trend: "down",
-    change: "-2.1%",
-    cost: 678.45,
-  },
-  {
-    category: "Database",
-    totalResources: 3,
-    utilizationRate: 91.2,
-    trend: "up",
-    change: "+8.3%",
-    cost: 892.34,
-  },
-  {
-    category: "Networking",
-    totalResources: 1,
-    utilizationRate: 45.6,
-    trend: "up",
-    change: "+1.8%",
-    cost: 220.26,
-  },
-];
-
-const projectPerformance = [
-  {
-    id: 1,
-    name: "E-commerce Platform",
-    resources: 9,
-    uptime: 99.9,
-    cost: 1247.83,
-    efficiency: 85.2,
-    status: "healthy",
-  },
-  {
-    id: 2,
-    name: "Analytics Dashboard",
-    resources: 2,
-    uptime: 99.7,
-    cost: 456.78,
-    efficiency: 92.1,
-    status: "healthy",
-  },
-  {
-    id: 3,
-    name: "Mobile App Backend",
-    resources: 4,
-    uptime: 98.9,
-    cost: 678.45,
-    efficiency: 76.8,
-    status: "warning",
-  },
-];
-
-const costTrends = [
-  { month: "Aug", amount: 2890.45 },
-  { month: "Sep", amount: 3120.67 },
-  { month: "Oct", amount: 2956.23 },
-  { month: "Nov", amount: 3247.83 },
-  { month: "Dec", amount: 3389.12 },
-];
 
 export default function AnalyticsPage() {
   const [selectedTimeRange, setSelectedTimeRange] = useState("30d");
@@ -179,7 +106,7 @@ export default function AnalyticsPage() {
                   Total Resources
                 </p>
                 <p className="text-2xl font-bold">
-                  {analyticsOverview.totalResources}
+                  {mockAnalyticsOverview.totalResources}
                 </p>
               </div>
               <BarChart3 className="h-8 w-8 text-muted-foreground" />
@@ -195,7 +122,7 @@ export default function AnalyticsPage() {
                   Active Projects
                 </p>
                 <p className="text-2xl font-bold">
-                  {analyticsOverview.activeProjects}
+                  {mockAnalyticsOverview.activeProjects}
                 </p>
               </div>
               <Users className="h-8 w-8 text-muted-foreground" />
@@ -211,7 +138,7 @@ export default function AnalyticsPage() {
                   Monthly Spend
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(analyticsOverview.monthlySpend)}
+                  {formatCurrency(mockAnalyticsOverview.monthlySpend)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />
@@ -227,7 +154,7 @@ export default function AnalyticsPage() {
                   Utilization
                 </p>
                 <p className="text-2xl font-bold">
-                  {analyticsOverview.utilizationRate}%
+                  {mockAnalyticsOverview.utilizationRate}%
                 </p>
               </div>
               <Activity className="h-8 w-8 text-muted-foreground" />
@@ -243,7 +170,7 @@ export default function AnalyticsPage() {
                   Growth Rate
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  +{analyticsOverview.growthRate}%
+                  +{mockAnalyticsOverview.growthRate}%
                 </p>
               </div>
               <TrendingUp className="h-8 w-8 text-muted-foreground" />
@@ -259,7 +186,7 @@ export default function AnalyticsPage() {
                   Active Alerts
                 </p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {analyticsOverview.alertsActive}
+                  {mockAnalyticsOverview.alertsActive}
                 </p>
               </div>
               <Clock className="h-8 w-8 text-muted-foreground" />
@@ -279,7 +206,7 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {resourceUtilization.map((category, index) => (
+              {mockResourceUtilization.map((category, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -337,9 +264,9 @@ export default function AnalyticsPage() {
           <CardContent>
             <div className="space-y-4">
               <div className="h-48 flex items-end justify-between bg-muted/20 p-4 rounded">
-                {costTrends.map((trend, index) => {
+                {mockCostTrends.map((trend, index) => {
                   const maxAmount = Math.max(
-                    ...costTrends.map((t) => t.amount)
+                    ...mockCostTrends.map((t) => t.amount)
                   );
                   const height = (trend.amount / maxAmount) * 150;
                   return (
@@ -358,7 +285,7 @@ export default function AnalyticsPage() {
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
                   Current month:{" "}
-                  {formatCurrency(costTrends[costTrends.length - 1].amount)}
+                  {formatCurrency(mockCostTrends[mockCostTrends.length - 1].amount)}
                 </p>
               </div>
             </div>
@@ -376,7 +303,7 @@ export default function AnalyticsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {projectPerformance.map((project) => (
+            {mockProjectPerformance.map((project) => (
               <div
                 key={project.id}
                 className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"

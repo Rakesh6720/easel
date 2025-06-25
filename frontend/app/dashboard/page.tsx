@@ -12,75 +12,17 @@ import {
   Cloud,
   Database,
   Globe
-} from "lucide-react"
-import { formatCurrency } from "@/lib/utils"
+} from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
+import { 
+  mockDashboardStats, 
+  mockRecentProjects, 
+  mockResourceTypes,
+  type DashboardStat,
+  type RecentProject,
+  type ResourceType
+} from "@/lib/mock-dashboard-data"
 import Link from "next/link"
-
-// Mock data - in real app this would come from API
-const stats = [
-  {
-    title: "Active Projects",
-    value: "12",
-    change: "+2 from last month",
-    icon: Activity,
-    trend: "up"
-  },
-  {
-    title: "Monthly Cost",
-    value: formatCurrency(2847.32),
-    change: "-12% from last month",
-    icon: DollarSign,
-    trend: "down"
-  },
-  {
-    title: "Active Resources",
-    value: "47",
-    change: "+8 from last month",
-    icon: Server,
-    trend: "up"
-  },
-  {
-    title: "Cost Savings",
-    value: formatCurrency(423.12),
-    change: "Optimized this month",
-    icon: TrendingUp,
-    trend: "up"
-  }
-]
-
-const recentProjects = [
-  {
-    id: 1,
-    name: "E-commerce Platform",
-    status: "Active",
-    resources: 8,
-    cost: 425.32,
-    lastUpdated: "2 hours ago"
-  },
-  {
-    id: 2,
-    name: "API Gateway Service",
-    status: "Provisioning",
-    resources: 3,
-    cost: 156.21,
-    lastUpdated: "1 day ago"
-  },
-  {
-    id: 3,
-    name: "Data Analytics Pipeline",
-    status: "Active",
-    resources: 12,
-    cost: 892.45,
-    lastUpdated: "3 days ago"
-  }
-]
-
-const resourceTypes = [
-  { name: "App Services", count: 15, icon: Globe, color: "bg-azure-blue" },
-  { name: "Storage Accounts", count: 8, icon: Database, color: "bg-azure-teal" },
-  { name: "SQL Databases", count: 5, icon: Server, color: "bg-azure-green" },
-  { name: "Other", count: 19, icon: Cloud, color: "bg-azure-purple" }
-]
 
 export default function Dashboard() {
   return (
@@ -103,7 +45,7 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
+        {mockDashboardStats.map((stat) => (
           <Card key={stat.title}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -144,7 +86,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentProjects.map((project) => (
+              {mockRecentProjects.map((project) => (
                 <div key={project.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                   <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 azure-gradient rounded-lg flex items-center justify-center">
@@ -187,7 +129,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {resourceTypes.map((type) => (
+              {mockResourceTypes.map((type) => (
                 <div key={type.name} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className={`w-8 h-8 ${type.color} rounded-lg flex items-center justify-center`}>
