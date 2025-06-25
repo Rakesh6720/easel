@@ -53,14 +53,26 @@ import {
   getCurrentMetrics,
 } from "@/lib/mock-resource-data";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
 export default function ResourceDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const { id: projectId, resourceId } = params;
   const [activeTab, setActiveTab] = useState<
     "overview" | "metrics" | "logs" | "settings"
   >("overview");
+
+  // Check for tab parameter in URL and set initial tab
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (
+      tabParam &&
+      ["overview", "metrics", "logs", "settings"].includes(tabParam)
+    ) {
+      setActiveTab(tabParam as "overview" | "metrics" | "logs" | "settings");
+    }
+  }, [searchParams]);
 
   // Get dynamic data based on resourceId using the imported functions
   const resourceIdNum = parseInt(resourceId as string);
