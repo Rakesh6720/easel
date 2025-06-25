@@ -1,8 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Bell, Menu, Sun, Moon, LogOut, User, Settings } from "lucide-react";
+import { Menu, Sun, Moon, LogOut, User, Settings } from "lucide-react";
 import { GlobalSearch } from "@/components/ui/global-search";
+import { NotificationDropdown } from "@/components/ui/notification-dropdown";
 import { useAuth } from "@/contexts/auth-context";
 import { useState } from "react";
 import {
@@ -80,12 +81,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           </Button>
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive rounded-full text-xs text-white flex items-center justify-center">
-              3
-            </span>
-          </Button>
+          <NotificationDropdown />
 
           {/* User menu */}
           <DropdownMenu>
