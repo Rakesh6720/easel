@@ -111,6 +111,7 @@ class AuthService {
     this.token = null
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_token')
+      localStorage.removeItem('user_email')
     }
   }
 
@@ -132,6 +133,11 @@ class AuthService {
     
     const authData = response.data
     this.setToken(authData.token)
+    
+    // Store user email for test user detection
+    if (authData.user?.email) {
+      localStorage.setItem('user_email', authData.user.email)
+    }
     
     return authData
   }

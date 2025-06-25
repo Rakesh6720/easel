@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { projectsService, type Project } from "@/lib/projects";
+import { TestUserBanner } from "@/components/ui/test-user-banner";
 import Link from "next/link";
 
 const getStatusIcon = (status: string) => {
@@ -83,6 +84,8 @@ export default function ProjectsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <TestUserBanner />
+      
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>

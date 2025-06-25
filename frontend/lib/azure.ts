@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { isTestUser } from './test-user'
+import { mockAzureCredentials, mockResourceMetrics } from './mock-data-enhanced'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'
 
@@ -33,6 +35,13 @@ class AzureService {
   }
 
   async getCredentials(): Promise<AzureCredential[]> {
+    // Return mock data for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => resolve(mockAzureCredentials), 300)
+      })
+    }
+
     const response = await axios.get(`${API_BASE_URL}/azure/credentials`, {
       headers: this.getAuthHeaders()
     })
@@ -40,6 +49,25 @@ class AzureService {
   }
 
   async addCredentials(data: AddAzureCredentialsRequest): Promise<AzureCredential> {
+    // Simulate adding credentials for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const newCredential: AzureCredential = {
+            id: Date.now(),
+            subscriptionId: data.subscriptionId,
+            subscriptionName: `Demo ${data.displayName}`,
+            displayName: data.displayName,
+            isDefault: false,
+            isActive: true,
+            lastValidated: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          }
+          resolve(newCredential)
+        }, 1000)
+      })
+    }
+
     const response = await axios.post(`${API_BASE_URL}/azure/credentials`, data, {
       headers: this.getAuthHeaders()
     })
@@ -47,6 +75,18 @@ class AzureService {
   }
 
   async validateCredentials(credentialId: number): Promise<ValidationResponse> {
+    // Simulate validation for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          resolve({
+            isValid: true,
+            lastValidated: new Date().toISOString()
+          })
+        }, 800)
+      })
+    }
+
     const response = await axios.post(`${API_BASE_URL}/azure/credentials/${credentialId}/validate`, {}, {
       headers: this.getAuthHeaders()
     })
@@ -74,6 +114,16 @@ class AzureService {
   }
 
   async getResourceMetrics(resourceId: number, startTime?: string, endTime?: string): Promise<any[]> {
+    // Return mock metrics for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const metrics = mockResourceMetrics.filter(m => m.resourceId === resourceId)
+          resolve(metrics)
+        }, 400)
+      })
+    }
+
     const params = new URLSearchParams()
     if (startTime) params.append('startTime', startTime)
     if (endTime) params.append('endTime', endTime)

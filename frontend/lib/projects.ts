@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { isTestUser } from './test-user'
+import { mockProjectsEnhanced, searchMockProjects } from './mock-data-enhanced'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api'
 
@@ -58,6 +60,13 @@ class ProjectsService {
   }
 
   async getProjects(): Promise<Project[]> {
+    // Return mock data for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => resolve(mockProjectsEnhanced), 300) // Simulate API delay
+      })
+    }
+
     try {
       const response = await axios.get(`${API_BASE_URL}/projects`, {
         headers: this.getAuthHeaders()
@@ -73,6 +82,20 @@ class ProjectsService {
   }
 
   async getProject(id: number): Promise<Project> {
+    // Return mock data for test user
+    if (isTestUser()) {
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          const project = mockProjectsEnhanced.find(p => p.id === id)
+          if (project) {
+            resolve(project)
+          } else {
+            reject(new Error('Project not found'))
+          }
+        }, 200)
+      })
+    }
+
     try {
       const response = await axios.get(`${API_BASE_URL}/projects/${id}`, {
         headers: this.getAuthHeaders()
@@ -88,6 +111,28 @@ class ProjectsService {
   }
 
   async createProject(request: CreateProjectRequest): Promise<Project> {
+    // Simulate project creation for test user
+    if (isTestUser()) {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          const newProject: Project = {
+            id: Date.now(), // Simple ID generation
+            name: request.name,
+            description: 'AI-generated project description based on requirements',
+            userRequirements: request.userRequirements,
+            processedRequirements: `Processed requirements for: ${request.userRequirements}`,
+            status: 'Analyzing',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            userId: 999999,
+            resources: [],
+            conversations: []
+          }
+          resolve(newProject)
+        }, 1500) // Simulate longer processing time
+      })
+    }
+
     try {
       const response = await axios.post(`${API_BASE_URL}/projects`, request, {
         headers: this.getAuthHeaders()
