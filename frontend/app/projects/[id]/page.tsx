@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -38,6 +39,13 @@ import {
   getProcessedRequirements,
   getConversationsForProject,
 } from "@/lib/mock-project-details";
+import {
+  projectsService,
+  type Project,
+  type AzureResource,
+  type ProjectConversation,
+} from "@/lib/projects";
+import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -45,36 +53,141 @@ export default function ProjectDetailsPage() {
   const params = useParams();
   const projectId = parseInt(params.id as string, 10);
 
-  // Get project-specific data
-  const project = getProjectInfo(projectId);
-  const resources = getResourcesForProject(projectId);
+  const [project, setProject] = useState<Project | null>(null);
+  const [resources, setResources] = useState<AzureResource[]>([]);
+  const [conversations, setConversations] = useState<ProjectConversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (isTestUser()) {
+          // Use mock data for test user
+          const mockProject = getProjectInfo(projectId);
+          const mockResources = getResourcesForProject(projectId);
+          const mockConversations = getConversationsForProject(projectId);
+
+          // Convert mock data to proper format
+          setProject({
+            id: projectId,
+            name: mockProject.name,
+            description: mockProject.description,
+            userRequirements: getProjectRequirements(projectId),
+            processedRequirements: getProcessedRequirements(projectId),
+            status: mockProject.status as any,
+            createdAt: "2024-01-15T10:30:00Z",
+            updatedAt: mockProject.lastDeployed,
+            userId: 999999,
+            resources: mockResources.map((r) => ({
+              id: r.id,
+              name: r.name,
+              resourceType: r.type,
+              status: r.status as any,
+              location: r.location,
+              estimatedMonthlyCost: r.cost,
+              configuration: r.configuration,
+              createdAt: r.createdAt,
+              provisionedAt: r.lastUpdated,
+            })),
+            conversations: mockConversations.map((c) => ({
+              id: c.id,
+              projectId: projectId,
+              userMessage: c.userMessage,
+              aiResponse: c.assistantResponse,
+              createdAt: c.createdAt,
+            })),
+          });
+
+          setResources(
+            mockResources.map((r) => ({
+              id: r.id,
+              name: r.name,
+              resourceType: r.type,
+              status: r.status as any,
+              location: r.location,
+              estimatedMonthlyCost: r.cost,
+              configuration: r.configuration,
+              createdAt: r.createdAt,
+              provisionedAt: r.lastUpdated,
+            }))
+          );
+
+          setConversations(
+            mockConversations.map((c) => ({
+              id: c.id,
+              projectId: projectId,
+              userMessage: c.userMessage,
+              aiResponse: c.assistantResponse,
+              createdAt: c.createdAt,
+            }))
+          );
+        } else {
+          // Fetch real data for other users
+          const projectData = await projectsService.getProject(projectId);
+          const resourcesData = await projectsService.getProjectResources(
+            projectId
+          );
+          const conversationsData =
+            await projectsService.getProjectConversations(projectId);
+
+          setProject(projectData);
+          setResources(resourcesData);
+          setConversations(conversationsData);
+        }
+      } catch (err) {
+        console.error("Error fetching project data:", err);
+        setError("Failed to load project data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProjectData();
+  }, [projectId]);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Project Not Found
+          </h1>
+          <p className="text-muted-foreground mb-4">
+            {error || "The requested project could not be found."}
+          </p>
+          <Link href="/projects">
+            <Button variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Projects
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate project stats from resources
   const resourceCount = resources.length;
   const monthlyCost = resources.reduce(
-    (sum, resource) => sum + resource.cost,
+    (sum, resource) => sum + (resource.estimatedMonthlyCost || 0),
     0
   );
-  const activeResources = resources.filter(
-    (r) => r.status === "running" || r.status === "Active"
-  ).length;
-
-  // Enhanced project data with defaults for display
-  const projectData = {
-    id: projectId,
-    name: project.name,
-    description: project.description,
-    status: project.status,
-    environment: project.environment,
-    resourceCount,
-    monthlyCost,
-    createdAt: "2024-01-15T10:30:00Z", // Could be enhanced with real creation dates
-    lastUpdated: project.lastDeployed,
-    requirements: getProjectRequirements(projectId),
-    processedRequirements: getProcessedRequirements(projectId),
-  };
-
-  const conversations = getConversationsForProject(projectId);
+  const activeResources = resources.filter((r) => r.status === "Active").length;
 
   return (
     <div className="p-6 space-y-6">
@@ -88,7 +201,7 @@ export default function ProjectDetailsPage() {
           Projects
         </Link>
         <span>/</span>
-        <span>{projectData.name}</span>
+        <span>{project.name}</span>
       </div>
 
       {/* Project Header */}
@@ -96,25 +209,21 @@ export default function ProjectDetailsPage() {
         <div className="flex items-start space-x-4">
           <div className="w-16 h-16 azure-gradient rounded-xl flex items-center justify-center">
             <span className="text-white font-bold text-xl">
-              {projectData.name.charAt(0)}
+              {project.name.charAt(0)}
             </span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {projectData.name}
-            </h1>
-            <p className="text-muted-foreground mb-3">
-              {projectData.description}
-            </p>
+            <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
+            <p className="text-muted-foreground mb-3">{project.description}</p>
             <div className="flex items-center space-x-4">
-              <Badge className={getStatusColor(projectData.status)}>
-                {projectData.status}
+              <Badge className={getStatusColor(project.status)}>
+                {project.status}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {projectData.resourceCount} resources
+                {resourceCount} resources
               </span>
               <span className="text-sm text-muted-foreground">
-                {formatCurrency(projectData.monthlyCost)}/month
+                {formatCurrency(monthlyCost)}/month
               </span>
             </div>
           </div>
@@ -141,7 +250,7 @@ export default function ProjectDetailsPage() {
                   Monthly Cost
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatCurrency(projectData.monthlyCost)}
+                  {formatCurrency(monthlyCost)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-muted-foreground" />
@@ -156,9 +265,7 @@ export default function ProjectDetailsPage() {
                 <p className="text-sm font-medium text-muted-foreground">
                   Resources
                 </p>
-                <p className="text-2xl font-bold">
-                  {projectData.resourceCount}
-                </p>
+                <p className="text-2xl font-bold">{resourceCount}</p>
               </div>
               <Server className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -219,14 +326,17 @@ export default function ProjectDetailsPage() {
                   <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 hover:border-azure-blue transition-colors cursor-pointer">
                     <div className="flex items-center space-x-4">
                       <div className="text-2xl">
-                        {getResourceTypeIcon(resource.type)}
+                        {getResourceTypeIcon(resource.resourceType)}
                       </div>
                       <div>
                         <h4 className="font-semibold">{resource.name}</h4>
                         <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <span>{resource.type}</span>
+                          <span>{resource.resourceType}</span>
                           <span>{resource.location}</span>
-                          <span>{formatCurrency(resource.cost)}/month</span>
+                          <span>
+                            {formatCurrency(resource.estimatedMonthlyCost || 0)}
+                            /month
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -255,13 +365,13 @@ export default function ProjectDetailsPage() {
                 <div>
                   <h4 className="font-medium mb-2">Original Requirements</h4>
                   <p className="text-sm text-muted-foreground">
-                    {projectData.requirements}
+                    {project.userRequirements}
                   </p>
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">AI Analysis</h4>
                   <div className="text-sm text-muted-foreground space-y-1">
-                    {projectData.processedRequirements
+                    {project.processedRequirements
                       .split("\n")
                       .map((line: string, index: number) => (
                         <p key={index}>{line}</p>
@@ -318,15 +428,15 @@ export default function ProjectDetailsPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Created</span>
-                  <span>{formatDate(projectData.createdAt)}</span>
+                  <span>{formatDate(project.createdAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Last Updated</span>
-                  <span>{formatDate(projectData.lastUpdated)}</span>
+                  <span>{formatDate(project.updatedAt)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Project ID</span>
-                  <span className="font-mono">{projectData.id}</span>
+                  <span className="font-mono">{project?.id || projectId}</span>
                 </div>
               </div>
             </CardContent>

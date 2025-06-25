@@ -30,6 +30,7 @@ import {
   type ResourceType,
 } from "@/lib/mock-dashboard-data";
 import { isTestUser } from "@/lib/test-user";
+import { projectsService } from "@/lib/projects";
 import Link from "next/link";
 
 export default function Dashboard() {
@@ -50,10 +51,38 @@ export default function Dashboard() {
           setResourceTypes(mockResourceTypes);
         } else {
           // Fetch real data for other users
-          // TODO: Replace with actual API calls
-          setStats([]);
-          setRecentProjects([]);
-          setResourceTypes([]);
+          try {
+            const projects = await projectsService.getProjects();
+
+            // Convert projects to recent projects format for dashboard
+            const recentProjectsData: RecentProject[] = projects
+              .slice(0, 3)
+              .map((project) => ({
+                id: project.id,
+                name: project.name,
+                status: project.status,
+                resources: project.resources?.length || 0,
+                cost:
+                  project.resources?.reduce(
+                    (sum, resource) =>
+                      sum + (resource.estimatedMonthlyCost || 0),
+                    0
+                  ) || 0,
+                lastUpdated: new Date(project.updatedAt).toLocaleDateString(),
+              }));
+
+            setRecentProjects(recentProjectsData);
+
+            // TODO: Replace with actual API calls for stats and resource types
+            setStats([]);
+            setResourceTypes([]);
+          } catch (error) {
+            console.error("Error fetching real projects:", error);
+            // Fallback to empty state
+            setRecentProjects([]);
+            setStats([]);
+            setResourceTypes([]);
+          }
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
