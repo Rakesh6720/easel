@@ -1,48 +1,105 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { 
   ArrowRight, 
   ArrowLeft,
   Sparkles,
   MessageSquare,
   CheckCircle,
-  Loader2
+  Loader2,
+  ChevronDown,
+  Settings
 } from "lucide-react"
 import Link from "next/link"
+import { azureService, AzureCredential } from "@/lib/azure"
 
 interface ProjectData {
   name: string
   requirements: string
+  azureCredentialId: number | null
 }
 
 type Step = 'details' | 'analysis' | 'conversation' | 'recommendations'
 
 export default function NewProjectPage() {
   const [currentStep, setCurrentStep] = useState<Step>('details')
+
+  useEffect(() => {
+    const fetchCredentials = async () => {
+      try {
+        const creds = await azureService.getCredentials()
+        setCredentials(creds)
+        // Auto-select default credential if available
+        const defaultCred = creds.find(c => c.isDefault)
+        if (defaultCred) {
+          setProjectData(prev => ({ ...prev, azureCredentialId: defaultCred.id }))
+        }
+      } catch (error) {
+        console.error('Failed to load credentials:', error)
+      } finally {
+        setLoadingCredentials(false)
+      }
+    }
+    
+    fetchCredentials()
+  }, [])
   const [projectData, setProjectData] = useState<ProjectData>({
     name: '',
-    requirements: ''
+    requirements: '',
+    azureCredentialId: null
   })
+  const [credentials, setCredentials] = useState<AzureCredential[]>([])
+  const [loadingCredentials, setLoadingCredentials] = useState(true)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState('')
   const [conversation, setConversation] = useState<Array<{role: 'user' | 'assistant', message: string}>>([])
   const [currentMessage, setCurrentMessage] = useState('')
 
   const handleInitialSubmit = async () => {
-    if (!projectData.name || !projectData.requirements) return
+    if (!projectData.name || !projectData.requirements || !projectData.azureCredentialId) return
     
     setCurrentStep('analysis')
     setIsAnalyzing(true)
     
-    // Simulate API call to analyze requirements
-    setTimeout(() => {
-      setAnalysisResult(`Based on your requirements for "${projectData.name}", I've identified the following:
+    try {
+      // Actually create the project via API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/projects`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: projectData.name,
+          userRequirements: projectData.requirements,
+          azureCredentialId: projectData.azureCredentialId
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          window.location.href = '/login'
+          return
+        }
+        throw new Error('Failed to create project')
+      }
+
+      const project = await response.json()
+      
+      // Use the real project data
+      setAnalysisResult(`Based on your requirements for "${project.name}", I've analyzed the following:
 
 **Application Type**: ${projectData.requirements.toLowerCase().includes('web') ? 'Web Application' : 'Backend Service'}
 **Expected Scale**: Medium traffic application
@@ -60,9 +117,17 @@ export default function NewProjectPage() {
 
 Would you like me to ask some follow-up questions to refine these recommendations?`)
       
+      // Store the project ID for later use
+      sessionStorage.setItem('currentProjectId', project.id.toString())
+      
       setIsAnalyzing(false)
       setCurrentStep('conversation')
-    }, 3000)
+    } catch (error) {
+      console.error('Error creating project:', error)
+      setIsAnalyzing(false)
+      // Show error to user
+      alert('Failed to create project. Please try again.')
+    }
   }
 
   const handleSendMessage = () => {
@@ -185,13 +250,66 @@ Would you like me to ask some follow-up questions to refine these recommendation
                 </p>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="azureCredential">Azure Subscription</Label>
+                {loadingCredentials ? (
+                  <div className="flex items-center space-x-2 p-3 border rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm text-muted-foreground">Loading credentials...</span>
+                  </div>
+                ) : credentials.length === 0 ? (
+                  <div className="p-3 border rounded-md bg-muted/50">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      No Azure credentials found. You need to add Azure credentials first.
+                    </p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Manage Credentials
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-between"
+                        disabled={credentials.length === 0}
+                      >
+                        {projectData.azureCredentialId 
+                          ? credentials.find(c => c.id === projectData.azureCredentialId)?.displayName
+                          : "Select Azure subscription"
+                        }
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-full">
+                      {credentials.map((credential) => (
+                        <DropdownMenuItem
+                          key={credential.id}
+                          onClick={() => setProjectData(prev => ({ ...prev, azureCredentialId: credential.id }))}
+                          className="flex flex-col items-start"
+                        >
+                          <div className="font-medium">{credential.displayName}</div>
+                          <div className="text-xs text-muted-foreground">{credential.subscriptionName}</div>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Resources will be created in the selected Azure subscription.
+                </p>
+              </div>
+
               <div className="flex justify-end space-x-3">
                 <Button variant="outline" asChild>
                   <Link href="/projects">Cancel</Link>
                 </Button>
                 <Button 
                   onClick={handleInitialSubmit}
-                  disabled={!projectData.name || !projectData.requirements}
+                  disabled={!projectData.name || !projectData.requirements || !projectData.azureCredentialId}
                   variant="azure"
                 >
                   Analyze Requirements
@@ -317,7 +435,7 @@ Would you like me to ask some follow-up questions to refine these recommendation
                   Review your Azure resource recommendations and provision them to your subscription
                 </p>
                 <Button className="mt-6" variant="azure" asChild>
-                  <Link href="/projects/1/recommendations">
+                  <Link href={`/projects/${sessionStorage.getItem('currentProjectId') || '1'}/recommendations`}>
                     View Recommendations
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>

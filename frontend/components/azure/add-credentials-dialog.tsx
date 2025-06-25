@@ -96,10 +96,26 @@ export function AddCredentialsDialog({ onCredentialsAdded, children }: AddCreden
       onCredentialsAdded?.()
     } catch (error: any) {
       console.error('Failed to add credentials:', error)
+      console.error('Response data:', error.response?.data)
+      console.error('Response status:', error.response?.status)
+      
       if (error.response?.data?.message) {
         setError(error.response.data.message)
       } else if (error.response?.data?.errors) {
-        setError(error.response.data.errors.join(', '))
+        // Handle ASP.NET Core validation errors (object with field names as keys)
+        if (typeof error.response.data.errors === 'object') {
+          const errorMessages = Object.values(error.response.data.errors)
+            .flat() // Flatten arrays of error messages
+            .join(', ')
+          setError(errorMessages)
+        } else if (Array.isArray(error.response.data.errors)) {
+          setError(error.response.data.errors.join(', '))
+        } else {
+          setError(String(error.response.data.errors))
+        }
+      } else if (error.response?.data) {
+        // Fallback: try to show any data we got back
+        setError(JSON.stringify(error.response.data))
       } else {
         setError('Failed to add Azure credentials. Please try again.')
       }
@@ -147,7 +163,7 @@ export function AddCredentialsDialog({ onCredentialsAdded, children }: AddCreden
                 disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
-                A friendly name to identify this Azure subscription
+                A friendly name to identify this Azure subscription. Only letters, numbers, spaces, hyphens, underscores, and parentheses are allowed.
               </p>
             </div>
 

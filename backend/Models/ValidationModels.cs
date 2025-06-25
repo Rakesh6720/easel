@@ -12,7 +12,7 @@ public class RegisterRequest
 
     [Required(ErrorMessage = "Password is required")]
     [StringLength(128, MinimumLength = 8, ErrorMessage = "Password must be between 8 and 128 characters")]
-    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]",
+    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$",
         ErrorMessage = "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")]
     public string Password { get; set; } = string.Empty;
 
@@ -80,8 +80,9 @@ public class CreateProjectRequest
     [StringLength(5000, MinimumLength = 10, ErrorMessage = "Requirements must be between 10 and 5000 characters")]
     public string UserRequirements { get; set; } = string.Empty;
 
+    [Required(ErrorMessage = "Azure credential is required")]
     [Range(1, int.MaxValue, ErrorMessage = "Azure credential ID must be a positive number")]
-    public int? AzureCredentialId { get; set; }
+    public int AzureCredentialId { get; set; }
 }
 
 public class ValidationResult

@@ -208,26 +208,33 @@ export default function ProjectDetailPage() {
           <CardContent>
             <div className="space-y-4">
               {resources.map((resource) => (
-                <div key={resource.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-2xl">
-                      {getResourceTypeIcon(resource.type)}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold">{resource.name}</h4>
-                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                        <span>{resource.type}</span>
-                        <span>{resource.location}</span>
-                        <span>{formatCurrency(resource.cost)}/month</span>
+                <Link 
+                  key={resource.id} 
+                  href={`/projects/${params.id}/resources/${resource.id}`}
+                  className="block"
+                >
+                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 hover:border-azure-blue transition-colors cursor-pointer">
+                    <div className="flex items-center space-x-4">
+                      <div className="text-2xl">
+                        {getResourceTypeIcon(resource.type)}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold">{resource.name}</h4>
+                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                          <span>{resource.type}</span>
+                          <span>{resource.location}</span>
+                          <span>{formatCurrency(resource.cost)}/month</span>
+                        </div>
                       </div>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Badge className={getStatusColor(resource.status)}>
+                        {resource.status}
+                      </Badge>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={getStatusColor(resource.status)}>
-                      {resource.status}
-                    </Badge>
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

@@ -17,9 +17,11 @@ import {
   Star,
   RefreshCw,
   Calendar,
-  ExternalLink
+  ExternalLink,
+  Home
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import Link from "next/link"
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -111,6 +113,16 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Breadcrumb */}
+      <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-4">
+        <Link href="/dashboard" className="hover:text-azure-blue flex items-center">
+          <Home className="mr-1 h-4 w-4" />
+          Dashboard
+        </Link>
+        <span>/</span>
+        <span>Settings</span>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
