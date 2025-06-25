@@ -130,6 +130,140 @@ export const mockResourcesData: Record<number, ResourceData> = {
   },
 };
 
+// Project to Resources Mapping
+export const projectResourceMapping: Record<number, number[]> = {
+  1: [1, 2, 3, 4], // E-commerce project has all resources
+  2: [5, 6], // Analytics project has different resources
+  3: [7, 8, 9], // Mobile app project has different resources
+};
+
+// Additional resources for other projects
+export const additionalMockResources: Record<number, ResourceData> = {
+  5: {
+    id: 5,
+    name: "analytics-function-app",
+    type: "microsoft.web/sites",
+    status: "running",
+    location: "West US 2",
+    region: "West US 2",
+    cost: 89.5,
+    lastUpdated: "2024-01-21T10:30:00Z",
+    createdAt: "2024-01-18T14:20:00Z",
+    resourceGroup: "analytics-rg",
+    subscription: "Easel Development",
+    azureResourceId:
+      "/subscriptions/xxx/resourceGroups/analytics-rg/providers/Microsoft.Web/sites/analytics-function-app",
+    configuration: {
+      sku: "Y1",
+      runtime: "Python 3.9",
+      platform: "Linux",
+      instances: 0,
+      autoScale: true,
+      httpsOnly: true,
+      ftpsState: "Disabled",
+    },
+  },
+  6: {
+    id: 6,
+    name: "analytics-cosmos-db",
+    type: "microsoft.documentdb/databaseaccounts",
+    status: "running",
+    location: "West US 2",
+    region: "West US 2",
+    cost: 245.8,
+    lastUpdated: "2024-01-21T09:15:00Z",
+    createdAt: "2024-01-18T15:45:00Z",
+    resourceGroup: "analytics-rg",
+    subscription: "Easel Development",
+    azureResourceId:
+      "/subscriptions/xxx/resourceGroups/analytics-rg/providers/Microsoft.DocumentDB/databaseAccounts/analytics-cosmos-db",
+    configuration: {
+      tier: "Standard",
+      consistency: "Session",
+      multiRegion: true,
+      backupPolicy: "Continuous",
+      throughput: 1000,
+      partitionKey: "/userId",
+    },
+  },
+  7: {
+    id: 7,
+    name: "mobile-app-service",
+    type: "microsoft.web/sites",
+    status: "running",
+    location: "Central US",
+    region: "Central US",
+    cost: 125.75,
+    lastUpdated: "2024-01-21T11:45:00Z",
+    createdAt: "2024-01-19T09:30:00Z",
+    resourceGroup: "mobile-app-rg",
+    subscription: "Easel Development",
+    azureResourceId:
+      "/subscriptions/xxx/resourceGroups/mobile-app-rg/providers/Microsoft.Web/sites/mobile-app-service",
+    configuration: {
+      sku: "P1V2",
+      runtime: "Node.js 18",
+      platform: "Linux",
+      instances: 2,
+      autoScale: true,
+      httpsOnly: true,
+      ftpsState: "Disabled",
+    },
+  },
+  8: {
+    id: 8,
+    name: "mobile-redis-cache",
+    type: "microsoft.cache/redis",
+    status: "running",
+    location: "Central US",
+    region: "Central US",
+    cost: 67.2,
+    lastUpdated: "2024-01-21T08:20:00Z",
+    createdAt: "2024-01-19T10:15:00Z",
+    resourceGroup: "mobile-app-rg",
+    subscription: "Easel Development",
+    azureResourceId:
+      "/subscriptions/xxx/resourceGroups/mobile-app-rg/providers/Microsoft.Cache/Redis/mobile-redis-cache",
+    configuration: {
+      tier: "Standard",
+      capacity: "C1",
+      redisVersion: "6.0",
+      sslEnabled: true,
+      nonSslEnabled: false,
+      maxClients: 1000,
+    },
+  },
+  9: {
+    id: 9,
+    name: "mobile-notification-hub",
+    type: "microsoft.notificationhubs/namespaces/notificationhubs",
+    status: "Active",
+    location: "Central US",
+    region: "Central US",
+    cost: 15.99,
+    lastUpdated: "2024-01-21T07:30:00Z",
+    createdAt: "2024-01-19T11:00:00Z",
+    resourceGroup: "mobile-app-rg",
+    subscription: "Easel Development",
+    azureResourceId:
+      "/subscriptions/xxx/resourceGroups/mobile-app-rg/providers/Microsoft.NotificationHubs/namespaces/mobile-notifications/notificationHubs/mobile-notification-hub",
+    configuration: {
+      tier: "Standard",
+      pushEnabled: true,
+      registrationTtl: "90.00:00:00",
+      apnsCredential: "Configured",
+      gcmCredential: "Configured",
+      wnsCredential: "Configured",
+    },
+  },
+};
+
+// Combine all resources
+export const allMockResourcesData = {
+  ...mockResourcesData,
+  ...additionalMockResources,
+};
+
 // Alerts by resource ID
 export const mockResourceAlerts: Record<number, ResourceAlert[]> = {
   1: [
@@ -205,6 +339,91 @@ export const mockResourceAlerts: Record<number, ResourceAlert[]> = {
       message: "Daily telemetry cap reached",
       triggeredAt: "2024-01-20T18:45:00Z",
       resolved: true,
+    },
+  ],
+  5: [
+    // Analytics Function App
+    {
+      id: 1,
+      severity: "Info",
+      message: "Function execution completed successfully",
+      triggeredAt: "2024-01-21T10:00:00Z",
+      resolved: true,
+    },
+    {
+      id: 2,
+      severity: "Warning",
+      message: "Cold start detected - function warming up",
+      triggeredAt: "2024-01-21T09:30:00Z",
+      resolved: true,
+    },
+  ],
+  6: [
+    // Cosmos DB
+    {
+      id: 1,
+      severity: "Warning",
+      message: "Request unit consumption approaching limit",
+      triggeredAt: "2024-01-21T08:45:00Z",
+      resolved: false,
+    },
+    {
+      id: 2,
+      severity: "Info",
+      message: "Multi-region replication completed",
+      triggeredAt: "2024-01-21T07:30:00Z",
+      resolved: true,
+    },
+  ],
+  7: [
+    // Mobile App Service
+    {
+      id: 1,
+      severity: "Info",
+      message: "Auto-scaling triggered - added new instance",
+      triggeredAt: "2024-01-21T11:20:00Z",
+      resolved: true,
+    },
+    {
+      id: 2,
+      severity: "Warning",
+      message: "Memory usage above 75%",
+      triggeredAt: "2024-01-21T10:45:00Z",
+      resolved: false,
+    },
+  ],
+  8: [
+    // Redis Cache
+    {
+      id: 1,
+      severity: "Info",
+      message: "Cache hit ratio optimal (>95%)",
+      triggeredAt: "2024-01-21T08:00:00Z",
+      resolved: true,
+    },
+    {
+      id: 2,
+      severity: "Warning",
+      message: "High connection count detected",
+      triggeredAt: "2024-01-21T07:15:00Z",
+      resolved: true,
+    },
+  ],
+  9: [
+    // Notification Hub
+    {
+      id: 1,
+      severity: "Info",
+      message: "Push notification batch sent successfully",
+      triggeredAt: "2024-01-21T06:30:00Z",
+      resolved: true,
+    },
+    {
+      id: 2,
+      severity: "Warning",
+      message: "iOS certificate expires in 30 days",
+      triggeredAt: "2024-01-21T05:00:00Z",
+      resolved: false,
     },
   ],
 };
@@ -297,6 +516,111 @@ export const mockResourceLogs: Record<number, ResourceLog[]> = {
       source: "Dependency Tracking",
     },
   ],
+  5: [
+    // Analytics Function App
+    {
+      timestamp: "2024-01-21T10:25:18Z",
+      level: "Info",
+      message: "Function processed analytics batch: 1,250 events",
+      source: "Function Runtime",
+    },
+    {
+      timestamp: "2024-01-21T10:22:45Z",
+      level: "Warning",
+      message: "Cold start detected: function initialization took 2.3s",
+      source: "Function Runtime",
+    },
+    {
+      timestamp: "2024-01-21T10:20:12Z",
+      level: "Info",
+      message: "Cosmos DB connection established successfully",
+      source: "Database",
+    },
+  ],
+  6: [
+    // Cosmos DB
+    {
+      timestamp: "2024-01-21T09:30:22Z",
+      level: "Info",
+      message: "Document inserted successfully into analytics collection",
+      source: "Document Service",
+    },
+    {
+      timestamp: "2024-01-21T09:28:15Z",
+      level: "Warning",
+      message: "Request unit rate limit reached for partition key /user123",
+      source: "Throttling",
+    },
+    {
+      timestamp: "2024-01-21T09:25:44Z",
+      level: "Info",
+      message: "Cross-region replication completed: West US 2 → East US",
+      source: "Replication",
+    },
+  ],
+  7: [
+    // Mobile App Service
+    {
+      timestamp: "2024-01-21T11:40:18Z",
+      level: "Info",
+      message: "API endpoint /api/users responded in 145ms",
+      source: "Application",
+    },
+    {
+      timestamp: "2024-01-21T11:38:22Z",
+      level: "Error",
+      message: "Authentication failed for mobile client: invalid token",
+      source: "Authentication",
+    },
+    {
+      timestamp: "2024-01-21T11:35:55Z",
+      level: "Info",
+      message: "Auto-scaling triggered: scaling out to 3 instances",
+      source: "Auto Scaler",
+    },
+  ],
+  8: [
+    // Redis Cache
+    {
+      timestamp: "2024-01-21T08:15:30Z",
+      level: "Info",
+      message: "Cache GET operation completed: key 'user:session:abc123'",
+      source: "Cache Engine",
+    },
+    {
+      timestamp: "2024-01-21T08:12:45Z",
+      level: "Warning",
+      message: "Memory usage at 85% - consider scaling up",
+      source: "Memory Monitor",
+    },
+    {
+      timestamp: "2024-01-21T08:10:22Z",
+      level: "Info",
+      message: "Connection pool optimized: 45 active connections",
+      source: "Connection Manager",
+    },
+  ],
+  9: [
+    // Notification Hub
+    {
+      timestamp: "2024-01-21T06:25:12Z",
+      level: "Info",
+      message: "Push notification sent to 1,250 iOS devices",
+      source: "APNS Provider",
+    },
+    {
+      timestamp: "2024-01-21T06:22:33Z",
+      level: "Warning",
+      message: "FCM notification failed for 3 Android devices",
+      source: "FCM Provider",
+    },
+    {
+      timestamp: "2024-01-21T06:20:45Z",
+      level: "Info",
+      message: "Registration updated for device token abc123",
+      source: "Registration Service",
+    },
+  ],
 };
 
 // Current metrics by resource ID (for overview cards)
@@ -329,11 +653,46 @@ export const mockCurrentMetrics: Record<number, Record<string, any>> = {
     dependencies: { current: 350, failed: 8, averageTime: 125 },
     users: { active: 450, daily: 1200, weekly: 8500 },
   },
+  5: {
+    // Analytics Function App
+    cpu: { current: 15, average: 12, max: 45 },
+    memory: { current: 125, average: 110, max: 180 }, // MB
+    executions: { current: 850, total: 25000, errorsToday: 2 },
+    duration: { current: 1.8, average: 2.1, p95: 4.2 }, // seconds
+  },
+  6: {
+    // Cosmos DB
+    requestUnits: { current: 750, total: 1000, percentage: 75 },
+    storage: { used: 15.8, total: 100, percentage: 15.8 }, // GB
+    throughput: { current: 850, provisioned: 1000, autoscale: true },
+    latency: { read: 2.5, write: 4.1, average: 3.2 }, // ms
+  },
+  7: {
+    // Mobile App Service
+    cpu: { current: 68, average: 55, max: 85 },
+    memory: { current: 74, average: 65, max: 89 },
+    requests: { current: 2150, total: 95000, errorsToday: 8 },
+    responseTime: { current: 195, average: 220, p95: 380 },
+  },
+  8: {
+    // Redis Cache
+    memory: { used: 850, total: 1000, percentage: 85 }, // MB
+    connections: { current: 45, max: 1000, average: 52 },
+    operations: { current: 1250, total: 450000, hitRate: 96.5 },
+    latency: { current: 0.8, average: 1.1, p95: 2.2 }, // ms
+  },
+  9: {
+    // Notification Hub
+    registrations: { active: 15000, total: 18000, percentage: 83.3 },
+    notifications: { sent: 1250, failed: 15, successRate: 98.8 },
+    platforms: { ios: 8500, android: 6200, windows: 300 },
+    throughput: { current: 450, max: 1000, average: 380 }, // per minute
+  },
 };
 
 // Helper function to get resource data by ID
 export const getResourceData = (resourceId: number): ResourceData | null => {
-  return mockResourcesData[resourceId] || null;
+  return allMockResourcesData[resourceId] || null;
 };
 
 export const getResourceAlerts = (resourceId: number): ResourceAlert[] => {
@@ -357,7 +716,54 @@ export const getCurrentMetrics = (resourceId: number): Record<string, any> => {
 
 // Helper function to get resources for a specific project
 export const getResourcesForProject = (projectId: number): ResourceData[] => {
-  // For now, return all resources for any project
-  // In a real app, you would filter based on the project ID
-  return Object.values(mockResourcesData);
+  const resourceIds = projectResourceMapping[projectId] || [];
+  return resourceIds
+    .map((id) => allMockResourcesData[id])
+    .filter((resource) => resource !== undefined);
+};
+
+// Helper function to get project info
+export const getProjectInfo = (projectId: number) => {
+  const projectInfo: Record<
+    number,
+    {
+      name: string;
+      description: string;
+      status: string;
+      environment: string;
+      lastDeployed: string;
+    }
+  > = {
+    1: {
+      name: "E-commerce Platform",
+      description: "Full-stack e-commerce application with payment processing",
+      status: "Active",
+      environment: "Production",
+      lastDeployed: "2024-01-20T15:30:00Z",
+    },
+    2: {
+      name: "Analytics Dashboard",
+      description: "Real-time analytics and reporting system",
+      status: "Active",
+      environment: "Production",
+      lastDeployed: "2024-01-21T10:30:00Z",
+    },
+    3: {
+      name: "Mobile App Backend",
+      description: "API and services for mobile application",
+      status: "Development",
+      environment: "Staging",
+      lastDeployed: "2024-01-21T11:45:00Z",
+    },
+  };
+
+  return (
+    projectInfo[projectId] || {
+      name: `Project ${projectId}`,
+      description: "Project description not available",
+      status: "Unknown",
+      environment: "Unknown",
+      lastDeployed: "Unknown",
+    }
+  );
 };
