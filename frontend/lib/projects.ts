@@ -524,15 +524,31 @@ class ProjectsService {
     }
 
     try {
+      console.log("Sending provision request:", {
+        url: `${API_BASE_URL}/projects/${id}/provision`,
+        data: { recommendations },
+        headers: this.getAuthHeaders()
+      });
+      
+      // Log the exact structure being sent
+      console.log("Recommendations structure:", JSON.stringify(recommendations, null, 2));
+      
       await axios.post(
         `${API_BASE_URL}/projects/${id}/provision`,
         { recommendations },
         { headers: this.getAuthHeaders() }
       );
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        window.location.href = "/login";
-        throw new Error("Authentication required");
+      console.error("Provision error:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Response data:", error.response?.data);
+        console.error("Response status:", error.response?.status);
+        console.error("Response headers:", error.response?.headers);
+        
+        if (error.response?.status === 401) {
+          window.location.href = "/login";
+          throw new Error("Authentication required");
+        }
       }
       throw error;
     }

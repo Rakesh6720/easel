@@ -152,6 +152,8 @@ Respond with a JSON array of resource recommendations:
 
             var jsonResponse = response.Value.Content[0].Text;
             
+            _logger.LogInformation("Raw OpenAI response: {Response}", jsonResponse);
+            
             // Clean up the response to extract just the JSON
             var startIndex = jsonResponse.IndexOf('[');
             var endIndex = jsonResponse.LastIndexOf(']') + 1;
@@ -160,10 +162,16 @@ Respond with a JSON array of resource recommendations:
             {
                 jsonResponse = jsonResponse.Substring(startIndex, endIndex - startIndex);
             }
+            
+            // Additional cleanup to remove comments and fix common JSON issues
+            jsonResponse = CleanJsonResponse(jsonResponse);
+            
+            _logger.LogInformation("Cleaned JSON response: {CleanedResponse}", jsonResponse);
 
             var recommendations = JsonSerializer.Deserialize<List<AzureResourceRecommendation>>(jsonResponse, new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive = true,
+                AllowTrailingCommas = true
             });
 
             return recommendations ?? new List<AzureResourceRecommendation>();
@@ -173,5 +181,42 @@ Respond with a JSON array of resource recommendations:
             _logger.LogError(ex, "Error recommending Azure resources with OpenAI");
             throw;
         }
+    }
+    
+    private string CleanJsonResponse(string jsonResponse)
+    {
+        if (string.IsNullOrEmpty(jsonResponse))
+            return jsonResponse;
+            
+        var lines = jsonResponse.Split('\n');
+        var cleanedLines = new List<string>();
+        
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim();
+            
+            // Skip empty lines
+            if (string.IsNullOrEmpty(trimmedLine))
+                continue;
+                
+            // Skip lines that start with // (comments)
+            if (trimmedLine.StartsWith("//"))
+                continue;
+                
+            // Remove inline comments (everything after //)
+            var commentIndex = trimmedLine.IndexOf("//");
+            if (commentIndex > 0)
+            {
+                trimmedLine = trimmedLine.Substring(0, commentIndex).Trim();
+            }
+            
+            // Skip if line is now empty after comment removal
+            if (string.IsNullOrEmpty(trimmedLine))
+                continue;
+                
+            cleanedLines.Add(trimmedLine);
+        }
+        
+        return string.Join("\n", cleanedLines);
     }
 }

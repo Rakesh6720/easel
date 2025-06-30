@@ -28,6 +28,7 @@ import {
   formatCurrency,
   formatDate,
   getStatusColor,
+  getStatusText,
   getResourceTypeIcon,
 } from "@/lib/utils";
 import {
@@ -62,7 +63,7 @@ export default function ProjectDetailsPage() {
   useEffect(() => {
     console.log("Project details page loading, projectId:", projectId);
     console.log("Is test user:", isTestUser());
-    
+
     const fetchProjectData = async () => {
       try {
         setLoading(true);
@@ -71,8 +72,12 @@ export default function ProjectDetailsPage() {
         // Use projectsService for both test and real users (it handles the test user logic internally)
         console.log("Loading project data via projectsService");
         const projectData = await projectsService.getProject(projectId);
-        const resourcesData = await projectsService.getProjectResources(projectId);
-        const conversationsData = await projectsService.getProjectConversations(projectId);
+        const resourcesData = await projectsService.getProjectResources(
+          projectId
+        );
+        const conversationsData = await projectsService.getProjectConversations(
+          projectId
+        );
 
         console.log("Project data:", projectData);
         console.log("Resources data:", resourcesData);
@@ -130,7 +135,36 @@ export default function ProjectDetailsPage() {
     (sum, resource) => sum + (resource.estimatedMonthlyCost || 0),
     0
   );
-  const activeResources = resources.filter((r) => r.status === "Active").length;
+
+  // Helper function to normalize status for comparison
+  const isStatus = (resource: any, statusName: string) => {
+    const status = resource.status;
+    if (typeof status === "number") {
+      switch (statusName) {
+        case "Active":
+          return status === 2;
+        case "Failed":
+          return status === 3;
+        case "Provisioning":
+          return status === 1;
+        case "Planned":
+          return status === 0;
+        case "Deleting":
+          return status === 4;
+        case "Deleted":
+          return status === 5;
+        default:
+          return false;
+      }
+    }
+    return String(status).toLowerCase() === statusName.toLowerCase();
+  };
+
+  const activeResources = resources.filter((r) => isStatus(r, "Active")).length;
+  const failedResources = resources.filter((r) => isStatus(r, "Failed")).length;
+  const provisioningResources = resources.filter((r) =>
+    isStatus(r, "Provisioning")
+  ).length;
 
   return (
     <div className="p-6 space-y-6">
@@ -206,7 +240,63 @@ export default function ProjectDetailsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
-                  Resources
+                  Active Resources
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  {activeResources}
+                </p>
+              </div>
+              <Server className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Show failed resources prominently if any exist */}
+        {failedResources > 0 && (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-red-700">
+                    Failed Resources
+                  </p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {failedResources}
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">Require attention</p>
+                </div>
+                <AlertTriangle className="h-8 w-8 text-red-600" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Show provisioning resources if any */}
+        {provisioningResources > 0 && (
+          <Card className="border-blue-200 bg-blue-50">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-700">
+                    Provisioning
+                  </p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {provisioningResources}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">In progress</p>
+                </div>
+                <Activity className="h-8 w-8 text-blue-600 animate-pulse" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Resources
                 </p>
                 <p className="text-2xl font-bold">{resourceCount}</p>
               </div>
@@ -259,39 +349,121 @@ export default function ProjectDetailsPage() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* Add failure summary at the top if there are failed resources */}
+            {failedResources > 0 && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center space-x-2 mb-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <h4 className="font-semibold text-red-800">
+                    {failedResources} Resource{failedResources > 1 ? "s" : ""}{" "}
+                    Failed to Provision
+                  </h4>
+                </div>
+                <p className="text-sm text-red-700 mb-3">
+                  Some resources couldn't be created. Review the failed
+                  resources below and try reprovisioning them.
+                </p>
+                <div className="flex space-x-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-100"
+                  >
+                    Retry All Failed
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-700 hover:bg-red-100"
+                  >
+                    View Logs
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
-              {resources.map((resource) => (
-                <Link
-                  key={resource.id}
-                  href={`/projects/${params.id}/resources/${resource.id}`}
-                  className="block"
-                >
-                  <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 hover:border-azure-blue transition-colors cursor-pointer">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-2xl">
-                        {getResourceTypeIcon(resource.resourceType)}
-                      </div>
-                      <div>
-                        <h4 className="font-semibold">{resource.name}</h4>
-                        <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                          <span>{resource.resourceType}</span>
-                          <span>{resource.location}</span>
-                          <span>
-                            {formatCurrency(resource.estimatedMonthlyCost || 0)}
-                            /month
-                          </span>
+              {resources.map((resource) => {
+                const statusText = getStatusText(resource.status);
+                const isFailed = isStatus(resource, "Failed");
+                const isProvisioning = isStatus(resource, "Provisioning");
+
+                return (
+                  <div
+                    key={resource.id}
+                    className={`p-4 border rounded-lg transition-all ${
+                      isFailed
+                        ? "border-red-200 bg-red-50 hover:border-red-300"
+                        : isProvisioning
+                        ? "border-blue-200 bg-blue-50 hover:border-blue-300"
+                        : "hover:bg-muted/50 hover:border-azure-blue"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="text-2xl">
+                          {getResourceTypeIcon(resource.resourceType)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <h4 className="font-semibold">{resource.name}</h4>
+                            {isFailed && (
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                            )}
+                          </div>
+                          <div className="flex items-center space-x-4 text-sm text-muted-foreground mt-1">
+                            <span>{resource.resourceType}</span>
+                            <span>{resource.location}</span>
+                            <span>
+                              {formatCurrency(
+                                resource.estimatedMonthlyCost || 0
+                              )}
+                              /month
+                            </span>
+                          </div>
+                          {isFailed && (
+                            <div className="mt-2 text-sm text-red-700">
+                              <p>
+                                ⚠️ Provisioning failed. This may be due to quota
+                                limits, naming conflicts, or permission issues.
+                              </p>
+                            </div>
+                          )}
+                          {isProvisioning && (
+                            <div className="mt-2 text-sm text-blue-700">
+                              <p>
+                                🔄 Resource is being provisioned. This may take
+                                several minutes.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Badge className={getStatusColor(resource.status)}>
-                        {resource.status}
-                      </Badge>
-                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-center space-x-2">
+                        <Badge className={getStatusColor(resource.status)}>
+                          {statusText}
+                        </Badge>
+                        {isFailed && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-100"
+                          >
+                            Retry
+                          </Button>
+                        )}
+                        <Link
+                          href={`/projects/${params.id}/resources/${resource.id}`}
+                        >
+                          <Button size="sm" variant="ghost">
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </div>
-                </Link>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -351,7 +523,9 @@ export default function ProjectDetailsPage() {
                     </p>
                     <p className="text-sm font-medium mb-1">Easel AI:</p>
                     <p className="text-sm text-muted-foreground">
-                      {conv.assistantResponse?.substring(0, 100) || 'No response available'}...
+                      {conv.assistantResponse?.substring(0, 100) ||
+                        "No response available"}
+                      ...
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
                       {formatDate(conv.createdAt)}

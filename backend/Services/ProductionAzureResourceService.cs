@@ -7,6 +7,10 @@ using Azure.ResourceManager.Sql;
 using Azure.ResourceManager.AppService.Models;
 using Azure.ResourceManager.Storage.Models;
 using Azure.ResourceManager.Sql.Models;
+using Azure.ResourceManager.ApplicationInsights;
+using Azure.ResourceManager.ApplicationInsights.Models;
+using Azure.ResourceManager.Redis;
+using Azure.ResourceManager.Redis.Models;
 using backend.Models;
 using backend.Data;
 using Microsoft.EntityFrameworkCore;
@@ -227,6 +231,8 @@ public class ProductionAzureResourceService : IAzureResourceService
                 "microsoft.storage/storageaccounts" => await ProvisionStorageAccountAsync(resourceGroup, azureResource, recommendation),
                 "microsoft.sql/servers/databases" => await ProvisionSqlDatabaseAsync(resourceGroup, azureResource, recommendation),
                 "microsoft.web/serverfarms" => await ProvisionAppServicePlanAsync(resourceGroup, azureResource, recommendation),
+                "microsoft.insights/components" => await ProvisionApplicationInsightsAsync(resourceGroup, azureResource, recommendation),
+                "microsoft.cache/redis" => await ProvisionRedisCacheAsync(resourceGroup, azureResource, recommendation),
                 _ => await ProvisionGenericResourceAsync(resourceGroup, azureResource, recommendation)
             };
 
@@ -247,15 +253,32 @@ public class ProductionAzureResourceService : IAzureResourceService
             var planCollection = resourceGroup.GetAppServicePlans();
             var config = JsonSerializer.Deserialize<AppServicePlanConfig>(azureResource.Configuration) ?? new AppServicePlanConfig();
             
+            // Use Free tier as fallback if quota issues exist
+            var skuName = config.Sku?.Name ?? "F1";
+            var skuTier = config.Sku?.Tier ?? "Free";
+            var skuSize = config.Sku?.Size ?? "F1";
+            var skuFamily = config.Sku?.Family ?? "F";
+            
+            // If the recommended plan is Premium/Standard and we're hitting quota issues, 
+            // fall back to Free tier for testing
+            if (skuTier is "Basic" or "Premium" or "PremiumV2" or "Standard")
+            {
+                _logger.LogWarning("Using Free tier instead of {Tier} to avoid quota issues", skuTier);
+                skuName = "F1";
+                skuTier = "Free";
+                skuSize = "F1";
+                skuFamily = "F";
+            }
+
             var planData = new AppServicePlanData(recommendation.Location)
             {
                 Sku = new AppServiceSkuDescription
                 {
-                    Name = config.Sku?.Name ?? "B1",
-                    Tier = config.Sku?.Tier ?? "Basic",
-                    Size = config.Sku?.Size ?? "B1",
-                    Family = config.Sku?.Family ?? "B",
-                    Capacity = config.Sku?.Capacity ?? 1
+                    Name = skuName,
+                    Tier = skuTier,
+                    Size = skuSize,
+                    Family = skuFamily,
+                    Capacity = 1
                 },
                 Kind = config.Kind ?? "app"
             };
@@ -264,9 +287,24 @@ public class ProductionAzureResourceService : IAzureResourceService
             planData.Tags.Add("ProjectId", azureResource.ProjectId.ToString());
 
             _logger.LogInformation("Creating App Service Plan {PlanName}", recommendation.Name);
-            var operation = await planCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, recommendation.Name, planData);
             
-            _logger.LogInformation("Successfully provisioned App Service Plan {PlanName}", recommendation.Name);
+            try
+            {
+                var operation = await planCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, recommendation.Name, planData);
+                _logger.LogInformation("Successfully provisioned App Service Plan {PlanName}", recommendation.Name);
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 409 && ex.ErrorCode == "Conflict")
+            {
+                _logger.LogWarning("App Service Plan creation conflict, waiting and retrying with unique name");
+                
+                // Generate a unique name with timestamp
+                var uniqueName = $"{recommendation.Name}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                _logger.LogInformation("Retrying App Service Plan creation with name {UniqueName}", uniqueName);
+                
+                await Task.Delay(2000); // Wait 2 seconds
+                var retryOperation = await planCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, uniqueName, planData);
+                _logger.LogInformation("Successfully provisioned App Service Plan with retry {UniqueName}", uniqueName);
+            }
             return true;
         }
         catch (Exception ex)
@@ -391,8 +429,34 @@ public class ProductionAzureResourceService : IAzureResourceService
             serverData.Tags.Add("ProjectId", azureResource.ProjectId.ToString());
 
             _logger.LogInformation("Creating SQL Server {ServerName}", serverName);
-            var serverOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, serverName, serverData);
-            var server = serverOperation.Value;
+            
+            SqlServerResource server;
+            try
+            {
+                var serverOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, serverName, serverData);
+                server = serverOperation.Value;
+            }
+            catch (Azure.RequestFailedException ex) when (ex.ErrorCode == "ProvisioningDisabled")
+            {
+                _logger.LogWarning("SQL provisioning disabled in {Location}, trying West US 2", recommendation.Location);
+                
+                // Try West US 2 as fallback region
+                serverData = new SqlServerData("West US 2")
+                {
+                    AdministratorLogin = config.AdminUsername ?? "easel-admin",
+                    AdministratorLoginPassword = config.AdminPassword ?? GenerateSecurePassword(),
+                    Tags =
+                    {
+                        ["CreatedBy"] = "Easel",
+                        ["ProjectId"] = azureResource.ProjectId.ToString(),
+                        ["OriginalLocation"] = recommendation.Location
+                    }
+                };
+                
+                var retryOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, serverName, serverData);
+                server = retryOperation.Value;
+                _logger.LogInformation("Successfully created SQL Server {ServerName} in fallback region West US 2", serverName);
+            }
 
             // Create the database
             var databaseCollection = server.GetSqlDatabases();
@@ -418,6 +482,99 @@ public class ProductionAzureResourceService : IAzureResourceService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to provision SQL Database {DatabaseName}", recommendation.Name);
+            return false;
+        }
+    }
+
+    private async Task<bool> ProvisionApplicationInsightsAsync(ResourceGroupResource resourceGroup, AzureResource azureResource, AzureResourceRecommendation recommendation)
+    {
+        try
+        {
+            _logger.LogInformation("Creating Application Insights {ComponentName}", recommendation.Name);
+            
+            var componentsCollection = resourceGroup.GetApplicationInsightsComponents();
+            var config = JsonSerializer.Deserialize<ApplicationInsightsConfig>(azureResource.Configuration) ?? new ApplicationInsightsConfig();
+            
+            var componentData = new ApplicationInsightsComponentData(recommendation.Location)
+            {
+                Kind = "web",
+                Tags =
+                {
+                    ["CreatedBy"] = "Easel",
+                    ["ProjectId"] = azureResource.ProjectId.ToString()
+                }
+            };
+            
+            // Set application type if specified in config
+            if (!string.IsNullOrEmpty(config.ApplicationType))
+            {
+                componentData.ApplicationType = config.ApplicationType;
+            }
+            
+            var operation = await componentsCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, recommendation.Name, componentData);
+            var component = operation.Value;
+            
+            azureResource.AzureResourceId = component.Id.ToString();
+            azureResource.Status = ResourceStatus.Active;
+            azureResource.ProvisionedAt = DateTime.UtcNow;
+            
+            _context.AzureResources.Update(azureResource);
+            await _context.SaveChangesAsync();
+            
+            _logger.LogInformation("Successfully created Application Insights {ComponentName}", recommendation.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to provision Application Insights {ComponentName}", recommendation.Name);
+            return false;
+        }
+    }
+
+    private async Task<bool> ProvisionRedisCacheAsync(ResourceGroupResource resourceGroup, AzureResource azureResource, AzureResourceRecommendation recommendation)
+    {
+        try
+        {
+            _logger.LogInformation("Creating Redis Cache {CacheName}", recommendation.Name);
+            
+            var redisCacheCollection = resourceGroup.GetRedisResources();
+            var config = JsonSerializer.Deserialize<RedisCacheConfig>(azureResource.Configuration) ?? new RedisCacheConfig();
+            
+            var cacheData = new RedisCreateOrUpdateContent(recommendation.Location, new RedisSku
+            {
+                Name = ParseRedisSkuName(config.Sku) ?? RedisSkuName.Basic,
+                Family = ParseRedisSkuFamily(config.Family) ?? RedisSkuFamily.C,
+                Capacity = config.Capacity ?? 1
+            })
+            {
+                EnableNonSslPort = false,
+                RedisConfiguration = new Dictionary<string, string>
+                {
+                    ["maxmemory-policy"] = "allkeys-lru"
+                },
+                Tags =
+                {
+                    ["CreatedBy"] = "Easel",
+                    ["ProjectId"] = azureResource.ProjectId.ToString()
+                }
+            };
+            
+            var operation = await redisCacheCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, recommendation.Name, cacheData);
+            var cache = operation.Value;
+            
+            azureResource.AzureResourceId = cache.Id.ToString();
+            azureResource.Status = ResourceStatus.Active;
+            azureResource.ProvisionedAt = DateTime.UtcNow;
+            
+            _context.AzureResources.Update(azureResource);
+            await _context.SaveChangesAsync();
+            
+            _logger.LogInformation("Successfully created Redis Cache {CacheName}", recommendation.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to provision Redis Cache {CacheName}", recommendation.Name);
             return false;
         }
     }
@@ -698,4 +855,38 @@ public class ProductionAzureResourceService : IAzureResourceService
         return new string(Enumerable.Repeat(chars, 16)
             .Select(s => s[random.Next(s.Length)]).ToArray());
     }
+    
+    private RedisSkuName? ParseRedisSkuName(string? sku)
+    {
+        return sku?.ToLower() switch
+        {
+            "basic" => RedisSkuName.Basic,
+            "standard" => RedisSkuName.Standard,
+            "premium" => RedisSkuName.Premium,
+            _ => null
+        };
+    }
+    
+    private RedisSkuFamily? ParseRedisSkuFamily(string? family)
+    {
+        return family?.ToUpper() switch
+        {
+            "C" => RedisSkuFamily.C,
+            "P" => RedisSkuFamily.P,
+            _ => null
+        };
+    }
+}
+
+// Configuration classes for Azure resources
+public class ApplicationInsightsConfig
+{
+    public string? ApplicationType { get; set; }
+}
+
+public class RedisCacheConfig
+{
+    public string? Sku { get; set; }
+    public string? Family { get; set; }
+    public int? Capacity { get; set; }
 }

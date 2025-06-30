@@ -162,6 +162,9 @@ public class ProjectsController : ControllerBase
     {
         try
         {
+            _logger.LogInformation("Received provision request for project {ProjectId}", id);
+            _logger.LogInformation("Request data: {RequestData}", System.Text.Json.JsonSerializer.Serialize(request));
+            
             var success = await _azureResourceService.ProvisionResourcesAsync(id, request.Recommendations);
             
             if (success)

@@ -83,10 +83,18 @@ export default function RecommendationsPage() {
       console.log("Received recommendations:", data);
       console.log("First recommendation:", data[0]);
       console.log("First recommendation ID:", data[0]?.id);
-      setRecommendations(data);
+      
+      // Add IDs to recommendations if they don't have them
+      const recommendationsWithIds = data.map((rec: any, index: number) => ({
+        ...rec,
+        id: rec.id || `rec_${Date.now()}_${index}`,
+        isRecommended: rec.isRecommended !== false // Default to true if not specified
+      }));
+      
+      setRecommendations(recommendationsWithIds);
 
       // Auto-select recommended resources
-      const recommendedIds = data
+      const recommendedIds = recommendationsWithIds
         .filter((r: AzureResourceRecommendation) => r.isRecommended && r.id)
         .map((r: AzureResourceRecommendation) => r.id);
       console.log("Auto-selecting recommended IDs:", recommendedIds);
@@ -141,6 +149,9 @@ export default function RecommendationsPage() {
         setError("No valid resources selected for provisioning");
         return;
       }
+
+      console.log("Provisioning project ID:", parseInt(params.id as string));
+      console.log("Selected recommendations:", selectedRecommendations);
 
       await projectsService.provisionResources(
         parseInt(params.id as string),

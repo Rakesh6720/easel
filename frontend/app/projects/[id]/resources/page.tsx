@@ -20,10 +20,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Settings, ExternalLink } from "lucide-react";
+import { Settings, ExternalLink, AlertTriangle } from "lucide-react";
 import { getResourcesForProject } from "@/lib/mock-resource-data";
 import { projectsService, type AzureResource } from "@/lib/projects";
 import { isTestUser } from "@/lib/test-user";
+import { getStatusColor, getStatusText } from "@/lib/utils";
 
 export default function ProjectResourcesPage() {
   const params = useParams();
@@ -292,79 +293,127 @@ export default function ProjectResourcesPage() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {resources.map((resource) => (
-            <Card
-              key={resource.id}
-              className="hover:shadow-md transition-shadow"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-lg">{resource.name}</CardTitle>
-                    <CardDescription>{resource.type}</CardDescription>
+          {resources.map((resource) => {
+            const statusText = getStatusText(resource.status);
+            const isFailed =
+              resource.status === 3 || resource.status === "Failed";
+            const isProvisioning =
+              resource.status === 1 || resource.status === "Provisioning";
+
+            return (
+              <Card
+                key={resource.id}
+                className={`transition-shadow ${
+                  isFailed
+                    ? "border-red-200 bg-red-50 hover:shadow-md hover:border-red-300"
+                    : isProvisioning
+                    ? "border-blue-200 bg-blue-50 hover:shadow-md hover:border-blue-300"
+                    : "hover:shadow-md"
+                }`}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-lg flex items-center space-x-2">
+                        <span>{resource.name}</span>
+                        {isFailed && (
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                        )}
+                      </CardTitle>
+                      <CardDescription>{resource.type}</CardDescription>
+                    </div>
+                    <Badge className={getStatusColor(resource.status)}>
+                      {statusText}
+                    </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      resource.status === "running"
-                        ? "default"
-                        : resource.status === "stopped"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {resource.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="text-sm">
-                    <span className="font-medium">Region:</span>{" "}
-                    {resource.region}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="text-sm">
+                      <span className="font-medium">Region:</span>{" "}
+                      {resource.region}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Resource Group:</span>{" "}
+                      {resource.resourceGroup}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Created:</span>{" "}
+                      {new Date(resource.createdAt).toLocaleDateString()}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Monthly Cost:</span>{" "}
+                      <span className="font-semibold text-green-600">
+                        ${resource.cost}/month
+                      </span>
+                    </div>
+
+                    {isFailed && (
+                      <div className="mt-3 p-2 bg-red-100 border border-red-200 rounded text-sm text-red-700">
+                        <p className="font-medium">⚠️ Provisioning Failed</p>
+                        <p className="text-xs mt-1">
+                          Check Azure portal for details or try reprovisioning.
+                        </p>
+                      </div>
+                    )}
+
+                    {isProvisioning && (
+                      <div className="mt-3 p-2 bg-blue-100 border border-blue-200 rounded text-sm text-blue-700">
+                        <p className="font-medium">
+                          🔄 Provisioning in Progress
+                        </p>
+                        <p className="text-xs mt-1">
+                          This may take several minutes to complete.
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Resource Group:</span>{" "}
-                    {resource.resourceGroup}
-                  </div>
-                  <div className="text-sm">
-                    <span className="font-medium">Created:</span>{" "}
-                    {new Date(resource.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-                <div className="mt-4 flex gap-2">
-                  <Button asChild size="sm" className="flex-1">
-                    <Link
-                      href={`/projects/${projectId}/resources/${resource.id}`}
-                    >
-                      View Details
-                    </Link>
-                  </Button>
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleConfigure(resource)}
+
+                  <div className="mt-4 flex gap-2">
+                    <Button asChild size="sm" className="flex-1">
+                      <Link
+                        href={`/projects/${projectId}/resources/${resource.id}`}
                       >
-                        <Settings className="w-4 h-4 mr-1" />
-                        Configure
+                        View Details
+                      </Link>
+                    </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleConfigure(resource)}
+                        >
+                          <Settings className="w-4 h-4 mr-1" />
+                          Configure
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle>Configure {resource.name}</DialogTitle>
+                          <DialogDescription>
+                            Manage settings and configuration for this{" "}
+                            {resource.type} resource
+                          </DialogDescription>
+                        </DialogHeader>
+                        {renderConfigurationContent(resource)}
+                      </DialogContent>
+                    </Dialog>
+
+                    {isFailed && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-300 text-red-700 hover:bg-red-100"
+                      >
+                        Retry
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Configure {resource.name}</DialogTitle>
-                        <DialogDescription>
-                          Manage settings and configuration for this{" "}
-                          {resource.type} resource
-                        </DialogDescription>
-                      </DialogHeader>
-                      {renderConfigurationContent(resource)}
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
