@@ -33,6 +33,7 @@ import {
   formatCurrency,
   formatDate,
   getStatusColor,
+  getStatusText,
   getResourceTypeIcon,
 } from "@/lib/utils";
 import {
@@ -52,6 +53,8 @@ import {
   getResourceLogs,
   getCurrentMetrics,
 } from "@/lib/mock-resource-data";
+import { projectsService, type AzureResource } from "@/lib/projects";
+import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 
@@ -62,6 +65,14 @@ export default function ResourceDetailPage() {
   const [activeTab, setActiveTab] = useState<
     "overview" | "metrics" | "logs" | "settings"
   >("overview");
+
+  // State for resource data
+  const [resource, setResource] = useState<any>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Check for tab parameter in URL and set initial tab
   useEffect(() => {
@@ -74,22 +85,105 @@ export default function ResourceDetailPage() {
     }
   }, [searchParams]);
 
-  // Get dynamic data based on resourceId using the imported functions
-  const resourceIdNum = parseInt(resourceId as string);
-  const mockResource = getResourceData(resourceIdNum);
-  const mockAlerts = getResourceAlerts(resourceIdNum);
-  const mockLogs = getResourceLogs(resourceIdNum);
-  const mockMetrics = getCurrentMetrics(resourceIdNum);
+  // Fetch resource data
+  useEffect(() => {
+    const fetchResourceData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  // Fallback if no resource found
-  if (!mockResource) {
+        const resourceIdNum = parseInt(resourceId as string);
+
+        if (isTestUser()) {
+          // Use mock data for test user
+          const mockResource = getResourceData(resourceIdNum);
+          const mockAlerts = getResourceAlerts(resourceIdNum);
+          const mockLogs = getResourceLogs(resourceIdNum);
+          const mockMetrics = getCurrentMetrics(resourceIdNum);
+
+          if (!mockResource) {
+            setError("Resource not found in mock data");
+            return;
+          }
+
+          setResource(mockResource);
+          setAlerts(mockAlerts);
+          setLogs(mockLogs);
+          setMetrics(mockMetrics);
+        } else {
+          // Fetch real data for other users
+          const project = await projectsService.getProject(
+            parseInt(projectId as string)
+          );
+          const foundResource = project?.resources?.find(
+            (r) => r.id === resourceIdNum
+          );
+
+          if (!foundResource) {
+            setError("Resource not found");
+            return;
+          }
+
+          // Convert API resource to expected format
+          const formattedResource = {
+            id: foundResource.id,
+            name: foundResource.name,
+            type: foundResource.resourceType,
+            status: foundResource.status,
+            location: foundResource.location,
+            region: foundResource.location,
+            cost: foundResource.estimatedMonthlyCost || 0,
+            lastUpdated: foundResource.provisionedAt || foundResource.createdAt,
+            createdAt: foundResource.createdAt,
+            resourceGroup: "default-rg", // Not available from API
+            subscription: "default-subscription", // Not available from API
+            azureResourceId: "", // Not available from API
+            configuration: foundResource.configuration || {},
+          };
+
+          setResource(formattedResource);
+          // For real data, we don't have alerts, logs, or metrics yet
+          setAlerts([]);
+          setLogs([]);
+          setMetrics({
+            cpu: { current: 0, average: 0, max: 0 },
+            memory: { current: 0, average: 0, max: 0 },
+            requests: { current: 0, total: 0, errorsToday: 0 },
+            responseTime: { current: 0, average: 0, p95: 0 },
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching resource data:", err);
+        setError("Failed to load resource data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResourceData();
+  }, [projectId, resourceId]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-48 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !resource) {
     return (
       <div className="p-6">
         <Card>
           <CardContent className="p-6 text-center">
             <h2 className="text-xl font-semibold mb-2">Resource Not Found</h2>
             <p className="text-muted-foreground">
-              The requested resource could not be found.
+              {error || "The requested resource could not be found."}
             </p>
             <Button asChild className="mt-4">
               <Link href={`/projects/${projectId}`}>Back to Project</Link>
@@ -124,29 +218,29 @@ export default function ResourceDetailPage() {
           Project Details
         </Link>
         <span>/</span>
-        <span>{mockResource.name}</span>
+        <span>{resource.name}</span>
       </div>
 
       {/* Resource Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start space-x-4">
           <div className="w-16 h-16 azure-gradient rounded-xl flex items-center justify-center text-3xl">
-            {getResourceTypeIcon(mockResource.type)}
+            {getResourceTypeIcon(resource.type)}
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {mockResource.name}
+              {resource.name}
             </h1>
-            <p className="text-muted-foreground mb-3">{mockResource.type}</p>
+            <p className="text-muted-foreground mb-3">{resource.type}</p>
             <div className="flex items-center space-x-4">
-              <Badge className={getStatusColor(mockResource.status)}>
-                {mockResource.status}
+              <Badge className={getStatusColor(resource.status)}>
+                {getStatusText(resource.status)}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {mockResource.location}
+                {resource.location}
               </span>
               <span className="text-sm text-muted-foreground">
-                {formatCurrency(mockResource.cost)}/month
+                {formatCurrency(resource.cost)}/month
               </span>
             </div>
           </div>
@@ -170,7 +264,7 @@ export default function ResourceDetailPage() {
           </Button>
           <Button variant="outline" size="sm" asChild>
             <a
-              href={`https://portal.azure.com/#@/resource${mockResource.azureResourceId}`}
+              href={`https://portal.azure.com/#@/resource${resource.azureResourceId}`}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -225,7 +319,7 @@ export default function ResourceDetailPage() {
                       CPU Usage
                     </p>
                     <p className="text-2xl font-bold">
-                      {mockMetrics?.cpu?.current || 0}%
+                      {metrics?.cpu?.current || 0}%
                     </p>
                   </div>
                   <Cpu className="h-8 w-8 text-muted-foreground" />
@@ -241,7 +335,7 @@ export default function ResourceDetailPage() {
                       Memory Usage
                     </p>
                     <p className="text-2xl font-bold">
-                      {mockMetrics?.memory?.current || 0}%
+                      {metrics?.memory?.current || 0}%
                     </p>
                   </div>
                   <HardDrive className="h-8 w-8 text-muted-foreground" />
@@ -257,7 +351,7 @@ export default function ResourceDetailPage() {
                       Requests/min
                     </p>
                     <p className="text-2xl font-bold">
-                      {mockMetrics?.requests?.current || 0}
+                      {metrics?.requests?.current || 0}
                     </p>
                   </div>
                   <Network className="h-8 w-8 text-muted-foreground" />
@@ -273,7 +367,7 @@ export default function ResourceDetailPage() {
                       Response Time
                     </p>
                     <p className="text-2xl font-bold">
-                      {mockMetrics?.responseTime?.current || 0}ms
+                      {metrics?.responseTime?.current || 0}ms
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-muted-foreground" />
@@ -290,64 +384,62 @@ export default function ResourceDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3 text-sm">
-                  {mockResource.type === "microsoft.web/sites" && (
+                  {resource.type === "microsoft.web/sites" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">SKU</span>
-                        <span>{mockResource.configuration.sku}</span>
+                        <span>{resource.configuration.sku}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Runtime</span>
-                        <span>{mockResource.configuration.runtime}</span>
+                        <span>{resource.configuration.runtime}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Platform</span>
-                        <span>{mockResource.configuration.platform}</span>
+                        <span>{resource.configuration.platform}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Instances</span>
-                        <span>{mockResource.configuration.instances}</span>
+                        <span>{resource.configuration.instances}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Auto Scale
                         </span>
                         <span>
-                          {mockResource.configuration.autoScale
+                          {resource.configuration.autoScale
                             ? "Enabled"
                             : "Disabled"}
                         </span>
                       </div>
                     </>
                   )}
-                  {mockResource.type === "microsoft.sql/servers/databases" && (
+                  {resource.type === "microsoft.sql/servers/databases" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Tier</span>
-                        <span>{mockResource.configuration.tier}</span>
+                        <span>{resource.configuration.tier}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Service Objective
                         </span>
-                        <span>
-                          {mockResource.configuration.serviceObjective}
-                        </span>
+                        <span>{resource.configuration.serviceObjective}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Max Size</span>
-                        <span>{mockResource.configuration.maxSizeGB} GB</span>
+                        <span>{resource.configuration.maxSizeGB} GB</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Collation</span>
-                        <span>{mockResource.configuration.collation}</span>
+                        <span>{resource.configuration.collation}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Backup Retention
                         </span>
                         <span>
-                          {mockResource.configuration.backupRetentionDays} days
+                          {resource.configuration.backupRetentionDays} days
                         </span>
                       </div>
                       <div className="flex justify-between">
@@ -355,34 +447,33 @@ export default function ResourceDetailPage() {
                           Geo Redundant Backup
                         </span>
                         <span>
-                          {mockResource.configuration.geoRedundantBackup
+                          {resource.configuration.geoRedundantBackup
                             ? "Enabled"
                             : "Disabled"}
                         </span>
                       </div>
                     </>
                   )}
-                  {mockResource.type ===
-                    "microsoft.storage/storageaccounts" && (
+                  {resource.type === "microsoft.storage/storageaccounts" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Account Type
                         </span>
-                        <span>{mockResource.configuration.accountType}</span>
+                        <span>{resource.configuration.accountType}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Access Tier
                         </span>
-                        <span>{mockResource.configuration.accessTier}</span>
+                        <span>{resource.configuration.accessTier}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           HTTPS Only
                         </span>
                         <span>
-                          {mockResource.configuration.httpsOnly
+                          {resource.configuration.httpsOnly
                             ? "Enabled"
                             : "Disabled"}
                         </span>
@@ -391,60 +482,52 @@ export default function ResourceDetailPage() {
                         <span className="text-muted-foreground">
                           Min TLS Version
                         </span>
-                        <span>
-                          {mockResource.configuration.minimumTlsVersion}
-                        </span>
+                        <span>{resource.configuration.minimumTlsVersion}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Blob Public Access
                         </span>
                         <span>
-                          {mockResource.configuration.blobPublicAccess
+                          {resource.configuration.blobPublicAccess
                             ? "Enabled"
                             : "Disabled"}
                         </span>
                       </div>
                     </>
                   )}
-                  {mockResource.type === "microsoft.insights/components" && (
+                  {resource.type === "microsoft.insights/components" && (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Application Type
                         </span>
-                        <span>
-                          {mockResource.configuration.applicationType}
-                        </span>
+                        <span>{resource.configuration.applicationType}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Flow Type</span>
-                        <span>{mockResource.configuration.flowType}</span>
+                        <span>{resource.configuration.flowType}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Request Source
                         </span>
-                        <span>{mockResource.configuration.requestSource}</span>
+                        <span>{resource.configuration.requestSource}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Retention</span>
-                        <span>
-                          {mockResource.configuration.retentionDays} days
-                        </span>
+                        <span>{resource.configuration.retentionDays} days</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">
                           Daily Data Cap
                         </span>
-                        <span>
-                          {mockResource.configuration.dailyDataCapGB} GB
-                        </span>
+                        <span>{resource.configuration.dailyDataCapGB} GB</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Sampling</span>
                         <span>
-                          {mockResource.configuration.samplingPercentage}%
+                          {resource.configuration.samplingPercentage}%
                         </span>
                       </div>
                     </>
@@ -453,7 +536,7 @@ export default function ResourceDetailPage() {
                     <span className="text-muted-foreground">
                       Resource Group
                     </span>
-                    <span>{mockResource.resourceGroup}</span>
+                    <span>{resource.resourceGroup}</span>
                   </div>
                 </div>
               </CardContent>
@@ -466,7 +549,7 @@ export default function ResourceDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {mockAlerts.map((alert) => (
+                  {alerts.map((alert) => (
                     <div key={alert.id} className="flex items-start space-x-3">
                       {alert.severity === "Warning" ? (
                         <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
@@ -950,7 +1033,7 @@ export default function ResourceDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockLogs.map((log, index) => (
+                {logs.map((log, index) => (
                   <div key={index} className="border-l-2 border-gray-200 pl-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
