@@ -2,6 +2,9 @@ import axios from "axios";
 import { isTestUser } from "./test-user";
 import { mockProjectsEnhanced, searchMockProjects } from "./mock-data-enhanced";
 
+// In-memory storage for test user created projects
+const testUserProjects = new Map<number, Project>();
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
 
@@ -71,7 +74,36 @@ class ProjectsService {
     // Return mock data for test user
     if (isTestUser()) {
       return new Promise((resolve) => {
-        setTimeout(() => resolve(mockProjectsEnhanced), 300); // Simulate API delay
+        setTimeout(() => {
+          // Start with static mock projects
+          const allProjects = [...mockProjectsEnhanced];
+          
+          // Add dynamically created projects from localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('test_project_')) {
+              try {
+                const projectData = localStorage.getItem(key);
+                if (projectData) {
+                  const project = JSON.parse(projectData);
+                  // Ensure it's not already in the static list
+                  if (!allProjects.find(p => p.id === project.id)) {
+                    allProjects.push(project);
+                    // Also restore to memory
+                    testUserProjects.set(project.id, project);
+                  }
+                }
+              } catch (e) {
+                console.warn("Error loading project from localStorage:", key, e);
+              }
+            }
+          }
+          
+          // Sort by most recent first
+          allProjects.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          
+          resolve(allProjects);
+        }, 300); // Simulate API delay
       });
     }
 
@@ -94,6 +126,27 @@ class ProjectsService {
     if (isTestUser()) {
       return new Promise((resolve, reject) => {
         setTimeout(() => {
+          // First check in-memory storage for dynamically created projects
+          let dynamicProject = testUserProjects.get(id);
+          if (dynamicProject) {
+            resolve(dynamicProject);
+            return;
+          }
+          
+          // Check localStorage for persistence across page reloads
+          try {
+            const storedProject = localStorage.getItem(`test_project_${id}`);
+            if (storedProject) {
+              const parsedProject = JSON.parse(storedProject);
+              testUserProjects.set(id, parsedProject); // Restore to memory
+              resolve(parsedProject);
+              return;
+            }
+          } catch (e) {
+            console.warn("Error reading from localStorage:", e);
+          }
+          
+          // Then check static mock data
           const project = mockProjectsEnhanced.find((p) => p.id === id);
           if (project) {
             resolve(project);
@@ -137,6 +190,14 @@ class ProjectsService {
             resources: [],
             conversations: [],
           };
+          
+          // Store the project in memory and localStorage for test users
+          testUserProjects.set(newProject.id, newProject);
+          try {
+            localStorage.setItem(`test_project_${newProject.id}`, JSON.stringify(newProject));
+          } catch (e) {
+            console.warn("Could not save to localStorage:", e);
+          }
           resolve(newProject);
         }, 1500); // Simulate longer processing time
       });
@@ -192,6 +253,39 @@ class ProjectsService {
   }
 
   async getProjectConversations(id: number): Promise<ProjectConversation[]> {
+    // Return mock conversations for test user
+    if (isTestUser()) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // Check if this is a dynamic project with its own conversations
+          let dynamicProject = testUserProjects.get(id);
+          
+          // If not in memory, check localStorage
+          if (!dynamicProject) {
+            try {
+              const storedProject = localStorage.getItem(`test_project_${id}`);
+              if (storedProject) {
+                const parsedProject = JSON.parse(storedProject);
+                dynamicProject = parsedProject;
+                testUserProjects.set(id, parsedProject);
+              }
+            } catch (e) {
+              console.warn("Error reading project from localStorage:", e);
+            }
+          }
+          
+          // If we found a dynamic project, return its conversations
+          if (dynamicProject && dynamicProject.conversations) {
+            resolve(dynamicProject.conversations);
+            return;
+          }
+          
+          // Otherwise return empty array for new projects
+          resolve([]);
+        }, 100);
+      });
+    }
+
     try {
       const response = await axios.get(
         `${API_BASE_URL}/projects/${id}/conversations`,
@@ -213,6 +307,58 @@ class ProjectsService {
     id: number,
     message: string
   ): Promise<{ response: string }> {
+    // Handle test user conversations
+    if (isTestUser()) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          // Generate a mock AI response
+          const mockResponse = `Thank you for your message: "${message}". This is a mock response for your project. I'd be happy to help you refine your requirements further or answer any questions about your Azure resources.`;
+          
+          // Get the project and add the conversation
+          let project = testUserProjects.get(id);
+          
+          // If not in memory, try to load from localStorage
+          if (!project) {
+            try {
+              const storedProject = localStorage.getItem(`test_project_${id}`);
+              if (storedProject) {
+                project = JSON.parse(storedProject);
+                testUserProjects.set(id, project!);
+              }
+            } catch (e) {
+              console.warn("Error loading project for conversation:", e);
+            }
+          }
+          
+          // Add the conversation to the project
+          if (project) {
+            const newConversation: ProjectConversation = {
+              id: Date.now(),
+              projectId: id,
+              userMessage: message,
+              aiResponse: mockResponse,
+              createdAt: new Date().toISOString(),
+            };
+            
+            if (!project.conversations) {
+              project.conversations = [];
+            }
+            project.conversations.push(newConversation);
+            
+            // Update in memory and localStorage
+            testUserProjects.set(id, project);
+            try {
+              localStorage.setItem(`test_project_${id}`, JSON.stringify(project));
+            } catch (e) {
+              console.warn("Could not save conversation to localStorage:", e);
+            }
+          }
+          
+          resolve({ response: mockResponse });
+        }, 1000); // Simulate API delay
+      });
+    }
+
     try {
       const response = await axios.post(
         `${API_BASE_URL}/projects/${id}/conversation`,
@@ -340,10 +486,40 @@ class ProjectsService {
   }
 
   async provisionResources(id: number, recommendations: any[]): Promise<void> {
-    // For test user, just simulate the provisioning
+    // For test user, simulate provisioning and add resources to the project
     if (isTestUser()) {
       return new Promise((resolve) => {
-        setTimeout(() => resolve(), 1000); // Simulate API delay
+        setTimeout(() => {
+          const project = testUserProjects.get(id);
+          if (project) {
+            // Convert recommendations to resources
+            const newResources: AzureResource[] = recommendations.map((rec, index) => ({
+              id: Date.now() + index,
+              name: rec.name || `Resource ${index + 1}`,
+              resourceType: rec.service || rec.resourceType || rec.type || "Unknown",
+              status: "Provisioning" as const,
+              location: rec.location || "East US",
+              estimatedMonthlyCost: rec.estimatedCost || rec.cost || 0,
+              configuration: rec.configuration || {},
+              createdAt: new Date().toISOString(),
+              provisionedAt: new Date().toISOString(),
+            }));
+            
+            // Update the project with new resources
+            project.resources = newResources;
+            project.status = "Active";
+            project.updatedAt = new Date().toISOString();
+            testUserProjects.set(id, project);
+            
+            // Persist to localStorage
+            try {
+              localStorage.setItem(`test_project_${id}`, JSON.stringify(project));
+            } catch (e) {
+              console.warn("Could not save updated project to localStorage:", e);
+            }
+          }
+          resolve();
+        }, 1000); // Simulate API delay
       });
     }
 
@@ -366,9 +542,32 @@ class ProjectsService {
     // Return mock resources for test user
     if (isTestUser()) {
       return new Promise((resolve) => {
-        setTimeout(
-          () =>
-            resolve([
+        setTimeout(() => {
+          // Check if this is a dynamic project with its own resources
+          let dynamicProject = testUserProjects.get(id);
+          
+          // If not in memory, check localStorage
+          if (!dynamicProject) {
+            try {
+              const storedProject = localStorage.getItem(`test_project_${id}`);
+              if (storedProject) {
+                const parsedProject = JSON.parse(storedProject);
+                dynamicProject = parsedProject;
+                testUserProjects.set(id, parsedProject);
+              }
+            } catch (e) {
+              console.warn("Error reading project from localStorage:", e);
+            }
+          }
+          
+          // If we found a dynamic project, return its resources
+          if (dynamicProject && dynamicProject.resources) {
+            resolve(dynamicProject.resources);
+            return;
+          }
+          
+          // Otherwise return static mock resources for predefined projects
+          resolve([
               {
                 id: 1,
                 name: "web-app-eastus",
@@ -399,9 +598,8 @@ class ProjectsService {
                 createdAt: new Date().toISOString(),
                 provisionedAt: new Date().toISOString(),
               },
-            ]),
-          300
-        );
+            ]);
+        }, 300);
       });
     }
 

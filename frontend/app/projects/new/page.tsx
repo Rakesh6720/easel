@@ -103,6 +103,37 @@ Would you like me to ask some follow-up questions to refine these recommendation
       // Store the project ID for later use
       sessionStorage.setItem('currentProjectId', project.id.toString())
       
+      // Initialize conversation with the analysis result
+      setConversation([
+        {
+          role: 'assistant',
+          message: `Based on your requirements for "${project.name}", I've analyzed the following:
+
+**Application Type**: ${projectData.requirements.toLowerCase().includes('web') ? 'Web Application' : 'Backend Service'}
+**Expected Scale**: Medium traffic application
+**Key Components Needed**:
+- User authentication and management
+- Database for data storage
+- API endpoints for frontend communication
+- Hosting infrastructure
+
+**Recommended Azure Resources**:
+- App Service for hosting
+- Azure SQL Database for data storage
+- Azure Storage Account for files/assets
+- Application Insights for monitoring
+
+Would you like me to ask some follow-up questions to refine these recommendations?
+
+**Questions to help me refine your setup:**
+- What's your expected user load or traffic volume?
+- Do you have any specific performance requirements?
+- Are there compliance or security requirements?
+- What's your preferred budget range?
+- Do you need high availability or disaster recovery?`
+        }
+      ])
+      
       setIsAnalyzing(false)
       setCurrentStep('conversation')
     } catch (error) {

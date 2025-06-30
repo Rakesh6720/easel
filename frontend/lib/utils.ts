@@ -46,6 +46,8 @@ export function getStatusColor(status: string | any): string {
 }
 
 export function getResourceTypeIcon(resourceType: string): string {
+  if (!resourceType) return "❓"; // Default icon for unknown/undefined types
+  
   switch (resourceType.toLowerCase()) {
     case "microsoft.web/sites":
       return "🌐";

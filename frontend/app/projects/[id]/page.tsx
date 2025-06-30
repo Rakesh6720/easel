@@ -60,84 +60,27 @@ export default function ProjectDetailsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log("Project details page loading, projectId:", projectId);
+    console.log("Is test user:", isTestUser());
+    
     const fetchProjectData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        if (isTestUser()) {
-          // Use mock data for test user
-          const mockProject = getProjectInfo(projectId);
-          const mockResources = getResourcesForProject(projectId);
-          const mockConversations = getConversationsForProject(projectId);
+        // Use projectsService for both test and real users (it handles the test user logic internally)
+        console.log("Loading project data via projectsService");
+        const projectData = await projectsService.getProject(projectId);
+        const resourcesData = await projectsService.getProjectResources(projectId);
+        const conversationsData = await projectsService.getProjectConversations(projectId);
 
-          // Convert mock data to proper format
-          setProject({
-            id: projectId,
-            name: mockProject.name,
-            description: mockProject.description,
-            userRequirements: getProjectRequirements(projectId),
-            processedRequirements: getProcessedRequirements(projectId),
-            status: mockProject.status as any,
-            createdAt: "2024-01-15T10:30:00Z",
-            updatedAt: mockProject.lastDeployed,
-            userId: 999999,
-            resources: mockResources.map((r) => ({
-              id: r.id,
-              name: r.name,
-              resourceType: r.type,
-              status: r.status as any,
-              location: r.location,
-              estimatedMonthlyCost: r.cost,
-              configuration: r.configuration,
-              createdAt: r.createdAt,
-              provisionedAt: r.lastUpdated,
-            })),
-            conversations: mockConversations.map((c) => ({
-              id: c.id,
-              projectId: projectId,
-              userMessage: c.userMessage,
-              aiResponse: c.assistantResponse,
-              createdAt: c.createdAt,
-            })),
-          });
+        console.log("Project data:", projectData);
+        console.log("Resources data:", resourcesData);
+        console.log("Conversations data:", conversationsData);
 
-          setResources(
-            mockResources.map((r) => ({
-              id: r.id,
-              name: r.name,
-              resourceType: r.type,
-              status: r.status as any,
-              location: r.location,
-              estimatedMonthlyCost: r.cost,
-              configuration: r.configuration,
-              createdAt: r.createdAt,
-              provisionedAt: r.lastUpdated,
-            }))
-          );
-
-          setConversations(
-            mockConversations.map((c) => ({
-              id: c.id,
-              projectId: projectId,
-              userMessage: c.userMessage,
-              aiResponse: c.assistantResponse,
-              createdAt: c.createdAt,
-            }))
-          );
-        } else {
-          // Fetch real data for other users
-          const projectData = await projectsService.getProject(projectId);
-          const resourcesData = await projectsService.getProjectResources(
-            projectId
-          );
-          const conversationsData =
-            await projectsService.getProjectConversations(projectId);
-
-          setProject(projectData);
-          setResources(resourcesData);
-          setConversations(conversationsData);
-        }
+        setProject(projectData);
+        setResources(resourcesData);
+        setConversations(conversationsData);
       } catch (err) {
         console.error("Error fetching project data:", err);
         setError("Failed to load project data");
@@ -408,7 +351,7 @@ export default function ProjectDetailsPage() {
                     </p>
                     <p className="text-sm font-medium mb-1">Easel AI:</p>
                     <p className="text-sm text-muted-foreground">
-                      {conv.assistantResponse.substring(0, 100)}...
+                      {conv.assistantResponse?.substring(0, 100) || 'No response available'}...
                     </p>
                     <p className="text-xs text-muted-foreground mt-2">
                       {formatDate(conv.createdAt)}

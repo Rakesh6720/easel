@@ -44,46 +44,51 @@ export default function Dashboard() {
       try {
         setLoading(true);
 
-        if (isTestUser()) {
-          // Show mock data for test user
-          setStats(mockDashboardStats);
-          setRecentProjects(mockRecentProjects);
-          setResourceTypes(mockResourceTypes);
-        } else {
-          // Fetch real data for other users
-          try {
-            const projects = await projectsService.getProjects();
+        // Use projectsService.getProjects() for both test and real users
+        try {
+          const projects = await projectsService.getProjects();
 
-            // Convert projects to recent projects format for dashboard
-            const recentProjectsData: RecentProject[] = projects
-              .slice(0, 3)
-              .map((project) => ({
-                id: project.id,
-                name: project.name,
-                status: project.status,
-                resources: project.resources?.length || 0,
-                cost:
-                  project.resources?.reduce(
-                    (sum, resource) =>
-                      sum + (resource.estimatedMonthlyCost || 0),
-                    0
-                  ) || 0,
-                lastUpdated: new Date(project.updatedAt).toLocaleDateString(),
+          // Convert projects to recent projects format for dashboard
+          const recentProjectsData: RecentProject[] = projects
+            .slice(0, 3)
+            .map((project) => ({
+              id: project.id,
+              name: project.name,
+              status: project.status,
+              resources: project.resources?.length || 0,
+              cost:
+                project.resources?.reduce(
+                  (sum, resource) =>
+                    sum + (resource.estimatedMonthlyCost || 0),
+                  0
+                ) || 0,
+              lastUpdated: new Date(project.updatedAt).toLocaleDateString(),
               }));
 
             setRecentProjects(recentProjectsData);
 
-            // TODO: Replace with actual API calls for stats and resource types
-            setStats([]);
-            setResourceTypes([]);
+            // For test users, also set mock stats and resource types
+            if (isTestUser()) {
+              setStats(mockDashboardStats);
+              setResourceTypes(mockResourceTypes);
+            } else {
+              // TODO: Replace with actual API calls for stats and resource types
+              setStats([]);
+              setResourceTypes([]);
+            }
           } catch (error) {
-            console.error("Error fetching real projects:", error);
-            // Fallback to empty state
-            setRecentProjects([]);
-            setStats([]);
-            setResourceTypes([]);
+            console.error("Error fetching projects:", error);
+            // Fallback to empty state or mock data for test users
+            if (isTestUser()) {
+              setRecentProjects(mockRecentProjects);
+              setStats(mockDashboardStats);
+              setResourceTypes(mockResourceTypes);
+            } else {
+              setRecentProjects([]);
+              setStats([]);
+              setResourceTypes([]);
+            }
           }
-        }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
