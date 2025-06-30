@@ -957,6 +957,23 @@ class ProjectsService {
       throw error;
     }
   }
+
+  async assignAzureCredential(projectId: number, azureCredentialId: number): Promise<void> {
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/projects/${projectId}/azure-credential`,
+        { AzureCredentialId: azureCredentialId },
+        { headers: this.getAuthHeaders() }
+      );
+    } catch (error) {
+      console.error("Assign Azure credential error:", error);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Authentication required");
+      }
+      throw error;
+    }
+  }
 }
 
 export const projectsService = new ProjectsService();

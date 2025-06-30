@@ -46,8 +46,10 @@ import {
   type AzureResource,
   type ProjectConversation,
 } from "@/lib/projects";
+import { azureService, type AzureCredential } from "@/lib/azure";
 import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useParams } from "next/navigation";
 
 export default function ProjectDetailsPage() {
@@ -63,6 +65,8 @@ export default function ProjectDetailsPage() {
     new Set()
   );
   const [retryingAll, setRetryingAll] = useState(false);
+  const [azureCredentials, setAzureCredentials] = useState<AzureCredential[]>([]);
+  const [assigningCredential, setAssigningCredential] = useState(false);
 
   useEffect(() => {
     console.log("Project details page loading, projectId:", projectId);
@@ -90,6 +94,10 @@ export default function ProjectDetailsPage() {
         setProject(projectData);
         setResources(resourcesData);
         setConversations(conversationsData);
+
+        // Load Azure credentials
+        const credentialsData = await azureService.getCredentials();
+        setAzureCredentials(credentialsData);
       } catch (err) {
         console.error("Error fetching project data:", err);
         setError("Failed to load project data");
@@ -150,6 +158,25 @@ export default function ProjectDetailsPage() {
       setError("Failed to retry failed resources");
     } finally {
       setRetryingAll(false);
+    }
+  };
+
+  const handleAssignCredential = async (credentialId: string) => {
+    try {
+      setAssigningCredential(true);
+      
+      await projectsService.assignAzureCredential(projectId, parseInt(credentialId));
+      
+      // Refresh the project data to show updated credential
+      const updatedProject = await projectsService.getProject(projectId);
+      setProject(updatedProject);
+      
+      setError(null);
+    } catch (err) {
+      console.error("Error assigning Azure credential:", err);
+      setError("Failed to assign Azure credential");
+    } finally {
+      setAssigningCredential(false);
     }
   };
 
@@ -389,6 +416,38 @@ export default function ProjectDetailsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Azure Credential Assignment */}
+      {!project?.userAzureCredentialId && azureCredentials.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="text-orange-800">Azure Credentials Required</CardTitle>
+            <CardDescription className="text-orange-700">
+              This project needs Azure credentials to provision resources. Please assign Azure credentials to enable resource provisioning.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-4">
+              <Select onValueChange={handleAssignCredential} disabled={assigningCredential}>
+                <SelectTrigger className="w-64">
+                  <SelectValue placeholder="Select Azure credential" />
+                </SelectTrigger>
+                <SelectContent>
+                  {azureCredentials.map((credential) => (
+                    <SelectItem key={credential.id} value={credential.id.toString()}>
+                      {credential.subscriptionName || credential.subscriptionId}
+                      {credential.isDefault && " (Default)"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {assigningCredential && (
+                <div className="text-sm text-orange-700">Assigning credential...</div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Resources */}

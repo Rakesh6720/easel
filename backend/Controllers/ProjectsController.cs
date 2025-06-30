@@ -199,6 +199,41 @@ public class ProjectsController : ControllerBase
         }
     }
 
+    [HttpPatch("{id}/azure-credential")]
+    public async Task<ActionResult> AssignAzureCredential(int id, [FromBody] AssignAzureCredentialRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            var project = await _unitOfWork.Projects.GetByIdAsync(id);
+            
+            if (project == null)
+                return NotFound("Project not found");
+                
+            if (project.UserId != userId)
+                return Forbid("You can only assign credentials to your own projects");
+                
+            // Verify the Azure credential exists and belongs to the user
+            var credential = await _unitOfWork.UserAzureCredentials.GetByIdAsync(request.AzureCredentialId);
+            if (credential == null || credential.UserId != userId)
+                return BadRequest("Invalid Azure credential");
+                
+            if (!credential.IsActive)
+                return BadRequest("Azure credential is not active");
+                
+            project.UserAzureCredentialId = request.AzureCredentialId;
+            await _unitOfWork.SaveChangesAsync();
+            
+            _logger.LogInformation("Assigned Azure credential {CredentialId} to project {ProjectId}", request.AzureCredentialId, id);
+            return Ok(new { message = "Azure credential assigned successfully" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning Azure credential to project {ProjectId}", id);
+            return StatusCode(500, "An error occurred while assigning Azure credential");
+        }
+    }
+
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateProject(int id, UpdateProjectRequest request)
     {
@@ -363,6 +398,11 @@ public class UpdateProjectRequest
 {
     public string? Name { get; set; }
     public string? Description { get; set; }
+}
+
+public class AssignAzureCredentialRequest
+{
+    public int AzureCredentialId { get; set; }
 }
 
 public class DeleteConfirmationResponse

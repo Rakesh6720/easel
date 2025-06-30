@@ -24,7 +24,8 @@ var claims = new[]
     new Claim(ClaimTypes.Name, "test@example.com"),
     new Claim(ClaimTypes.Email, "test@example.com"),
     new Claim("sub", "1"),
-    new Claim("email", "test@example.com")
+    new Claim("email", "test@example.com"),
+    new Claim("userId", "1")
 };
 
 // Create token
