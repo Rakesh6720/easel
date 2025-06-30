@@ -15,17 +15,20 @@ public class AzureController : ControllerBase
     private readonly IUnitOfWork _unitOfWork;
     private readonly IAzureResourceService _azureResourceService;
     private readonly IAzureMonitoringService _azureMonitoringService;
+    private readonly IServicePrincipalService _servicePrincipalService;
     private readonly ILogger<AzureController> _logger;
 
     public AzureController(
         IUnitOfWork unitOfWork,
         IAzureResourceService azureResourceService,
         IAzureMonitoringService azureMonitoringService,
+        IServicePrincipalService servicePrincipalService,
         ILogger<AzureController> logger)
     {
         _unitOfWork = unitOfWork;
         _azureResourceService = azureResourceService;
         _azureMonitoringService = azureMonitoringService;
+        _servicePrincipalService = servicePrincipalService;
         _logger = logger;
     }
 
@@ -313,6 +316,193 @@ public class AzureController : ControllerBase
             return StatusCode(500, new { message = "Failed to delete Azure credentials" });
         }
     }
+
+    [HttpPost("service-principal/create")]
+    public async Task<ActionResult<ServicePrincipalCreationResult>> CreateServicePrincipal(CreateServicePrincipalRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+
+            // Validate the request
+            if (string.IsNullOrEmpty(request.SubscriptionId) || 
+                string.IsNullOrEmpty(request.DisplayName) ||
+                string.IsNullOrEmpty(request.AccessToken))
+            {
+                return BadRequest(new { message = "SubscriptionId, DisplayName, and AccessToken are required" });
+            }
+
+            _logger.LogInformation("Creating service principal for user {UserId}, subscription {SubscriptionId}", 
+                userId, request.SubscriptionId);
+
+            var result = await _servicePrincipalService.CreateServicePrincipalAsync(request, userId);
+
+            if (result.Success)
+            {
+                _logger.LogInformation("Service principal created successfully for user {UserId}", userId);
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("Service principal creation failed for user {UserId}: {Error}", 
+                    userId, result.ErrorMessage);
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating service principal for user");
+            return StatusCode(500, new { message = "Failed to create service principal" });
+        }
+    }
+
+    [HttpPost("service-principal/validate-token")]
+    public async Task<ActionResult<bool>> ValidateToken(ValidateTokenRequest request)
+    {
+        try
+        {
+            var isValid = await _servicePrincipalService.ValidateUserAzureAccessAsync(request.AccessToken);
+            return Ok(new { isValid });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating Azure token");
+            return StatusCode(500, new { message = "Failed to validate token" });
+        }
+    }
+
+    [HttpPost("token/validate")]
+    public async Task<ActionResult<bool>> ValidateTokenAlternate(ValidateTokenRequest request)
+    {
+        try
+        {
+            var isValid = await _servicePrincipalService.ValidateUserAzureAccessAsync(request.AccessToken);
+            return Ok(new { isValid });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating Azure token");
+            return StatusCode(500, new { message = "Failed to validate token" });
+        }
+    }
+
+    [HttpPost("credentials/{credentialId}/assign-contributor-role")]
+    public async Task<ActionResult<RoleAssignmentResult>> AssignContributorRole(int credentialId, AssignRoleRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Assigning Contributor role to credential {CredentialId} for user {UserId}", 
+                credentialId, userId);
+
+            var result = await _servicePrincipalService.AssignContributorRoleToExistingCredentialAsync(
+                credentialId, request.AccessToken, userId);
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("Role assignment failed for credential {CredentialId}: {Error}", 
+                    credentialId, result.ErrorMessage);
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning Contributor role to credential {CredentialId}", credentialId);
+            return StatusCode(500, new { message = "Failed to assign role" });
+        }
+    }
+
+    [HttpPost("test/credentials/{credentialId}/assign-contributor-role")]
+    [AllowAnonymous]
+    public async Task<ActionResult<RoleAssignmentResult>> TestAssignContributorRole(int credentialId, AssignRoleRequest request)
+    {
+        try
+        {
+            int userId = 1; // Hardcoded for testing
+            _logger.LogInformation("TEST: Assigning Contributor role to credential {CredentialId} for user {UserId}", 
+                credentialId, userId);
+
+            var result = await _servicePrincipalService.AssignContributorRoleToExistingCredentialAsync(
+                credentialId, request.AccessToken, userId);
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("TEST: Role assignment failed for credential {CredentialId}: {Error}", 
+                    credentialId, result.ErrorMessage);
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TEST: Error assigning Contributor role to credential {CredentialId}", credentialId);
+            return StatusCode(500, new { message = "Failed to assign role" });
+        }
+    }
+
+    [HttpGet("credentials/{id}/role-check")]
+    public async Task<ActionResult<ContributorRoleCheckResult>> CheckContributorRole(int id)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Checking Contributor role for credential {CredentialId} and user {UserId}", id, userId);
+
+            var result = await _servicePrincipalService.CheckContributorRoleAsync(id, userId);
+            
+            if (result.IsSuccess)
+            {
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("Role check failed for credential {CredentialId}: {Error}", id, result.ErrorMessage);
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking Contributor role for credential {CredentialId}", id);
+            return StatusCode(500, new { message = "Failed to check role" });
+        }
+    }
+
+    [HttpPost("credentials/{credentialId}/elevate-permissions")]
+    public async Task<ActionResult<RoleAssignmentResult>> ElevateServicePrincipalPermissions(int credentialId, AssignRoleRequest request)
+    {
+        try
+        {
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Elevating permissions for credential {CredentialId} for user {UserId}", 
+                credentialId, userId);
+
+            var result = await _servicePrincipalService.ElevateServicePrincipalPermissionsAsync(
+                credentialId, request.AccessToken, userId);
+
+            if (result.Success)
+            {
+                return Ok(result);
+            }
+            else
+            {
+                _logger.LogWarning("Permission elevation failed for credential {CredentialId}: {Error}", 
+                    credentialId, result.ErrorMessage);
+                return BadRequest(new { message = result.ErrorMessage });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error elevating permissions for credential {CredentialId}", credentialId);
+            return StatusCode(500, new { message = "Failed to elevate permissions" });
+        }
+    }
 }
 
 
@@ -323,4 +513,14 @@ public class CredentialDeleteConfirmationResponse
     public int ActiveProjectCount { get; set; }
     public string Message { get; set; } = string.Empty;
     public string? Warning { get; set; }
+}
+
+public class ValidateTokenRequest
+{
+    public string AccessToken { get; set; } = string.Empty;
+}
+
+public class AssignRoleRequest
+{
+    public string AccessToken { get; set; } = string.Empty;
 }

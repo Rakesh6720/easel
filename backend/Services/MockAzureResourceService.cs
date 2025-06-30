@@ -171,5 +171,19 @@ public class MockAzureResourceService : IAzureResourceService
             _ => "⚠️ This will permanently delete the Azure resource and all associated data."
         };
     }
+
+    public async Task<AzureRoleCheckResult> CheckSubscriptionRoleAsync(int credentialId)
+    {
+        // Mock role check - simulate successful Contributor role for testing
+        await Task.Delay(300); // Simulate API call
+        
+        return new AzureRoleCheckResult
+        {
+            IsValid = true,
+            HasContributorRole = true,
+            Message = "Mock service principal has Contributor role on the subscription",
+            AssignedRoles = new List<string> { "b24988ac-6180-42a0-ab88-20f7382dd24c" } // Contributor role ID
+        };
+    }
 }
 

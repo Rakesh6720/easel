@@ -29,8 +29,9 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
 
 // Azure services
 builder.Services.AddSingleton<DefaultAzureCredential>();
-builder.Services.AddScoped<IAzureResourceService, MockAzureResourceService>();
+builder.Services.AddScoped<IAzureResourceService, ProductionAzureResourceService>();
 builder.Services.AddScoped<IAzureMonitoringService, AzureMonitoringService>();
+builder.Services.AddScoped<IServicePrincipalService, ServicePrincipalService>();
 
 // AI services
 builder.Services.AddScoped<IOpenAiService, OpenAiService>();
@@ -39,6 +40,9 @@ builder.Services.AddScoped<IRequirementAnalysisService, RequirementAnalysisServi
 // Authentication services
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpContextAccessor();
+
+// Service Principal services
+builder.Services.AddScoped<IServicePrincipalService, ServicePrincipalService>();
 
 // Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

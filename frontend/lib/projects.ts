@@ -51,6 +51,14 @@ export interface ProjectConversation {
   createdAt: string;
 }
 
+export interface AzureRoleCheckResult {
+  hasContributorRole: boolean;
+  isValid: boolean;
+  message: string;
+  assignedRoles: string[];
+  errorMessage?: string;
+}
+
 export interface CreateProjectRequest {
   name: string;
   userRequirements: string;
@@ -907,6 +915,41 @@ class ProjectsService {
       );
     } catch (error) {
       console.error("Retry all failed resources error:", error);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Authentication required");
+      }
+      throw error;
+    }
+  }
+
+  async checkAzureSubscriptionRole(
+    credentialId: number
+  ): Promise<AzureRoleCheckResult> {
+    // For test user, return mock successful result
+    if (isTestUser()) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            isValid: true,
+            hasContributorRole: true,
+            message:
+              "Mock service principal has Contributor role on the subscription",
+            assignedRoles: ["b24988ac-6180-42a0-ab88-20f7382dd24c"], // Contributor role ID
+            errorMessage: undefined,
+          });
+        }, 300);
+      });
+    }
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/azure/credentials/${credentialId}/role-check`,
+        { headers: this.getAuthHeaders() }
+      );
+      return response.data;
+    } catch (error) {
+      console.error("Check Azure role error:", error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         window.location.href = "/login";
         throw new Error("Authentication required");

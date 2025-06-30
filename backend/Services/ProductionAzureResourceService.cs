@@ -11,6 +11,8 @@ using Azure.ResourceManager.ApplicationInsights;
 using Azure.ResourceManager.ApplicationInsights.Models;
 using Azure.ResourceManager.Redis;
 using Azure.ResourceManager.Redis.Models;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using backend.Models;
 using backend.Data;
 using Microsoft.EntityFrameworkCore;
@@ -90,6 +92,106 @@ public class ProductionAzureResourceService : IAzureResourceService
         {
             _logger.LogError(ex, "Error getting available locations for credential {CredentialId}", credentialId);
             return new List<string>();
+        }
+    }
+
+    public async Task<AzureRoleCheckResult> CheckSubscriptionRoleAsync(int credentialId)
+    {
+        try
+        {
+            var credentials = await _context.UserAzureCredentials.FindAsync(credentialId);
+            if (credentials == null)
+            {
+                return new AzureRoleCheckResult
+                {
+                    IsValid = false,
+                    HasContributorRole = false,
+                    Message = "Credentials not found",
+                    ErrorMessage = "Azure credentials not found for the specified ID"
+                };
+            }
+
+            if (!credentials.IsActive)
+            {
+                return new AzureRoleCheckResult
+                {
+                    IsValid = false,
+                    HasContributorRole = false,
+                    Message = "Credentials are inactive",
+                    ErrorMessage = "Azure credentials are marked as inactive"
+                };
+            }
+
+            var armClient = CreateArmClient(credentials);
+            var subscription = armClient.GetSubscriptionResource(
+                new Azure.Core.ResourceIdentifier($"/subscriptions/{credentials.SubscriptionId}"));
+
+            // Get role assignments for the service principal at subscription level
+            var roleAssignments = subscription.GetRoleAssignments();
+            var assignedRoles = new List<string>();
+            bool hasContributorRole = false;
+
+            // The Contributor role definition ID is a well-known GUID in Azure
+            const string contributorRoleDefinitionId = "b24988ac-6180-42a0-ab88-20f7382dd24c";
+            
+            await foreach (var roleAssignment in roleAssignments)
+            {
+                try
+                {
+                    var assignment = await roleAssignment.GetAsync();
+                    var principalId = assignment.Value.Data.PrincipalId?.ToString();
+                    
+                    // Check if this role assignment is for our service principal
+                    if (principalId == credentials.ClientId)
+                    {
+                        var roleDefinitionId = assignment.Value.Data.RoleDefinitionId?.ToString();
+                        
+                        // Extract the role definition ID from the full resource ID
+                        if (!string.IsNullOrEmpty(roleDefinitionId))
+                        {
+                            var roleId = roleDefinitionId.Split('/').LastOrDefault();
+                            assignedRoles.Add(roleId ?? roleDefinitionId);
+                            
+                            // Check if this is the Contributor role
+                            if (roleId == contributorRoleDefinitionId)
+                            {
+                                hasContributorRole = true;
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error processing role assignment for credential {CredentialId}", credentialId);
+                    // Continue processing other role assignments
+                }
+            }
+
+            var message = hasContributorRole 
+                ? "Service principal has Contributor role on the subscription"
+                : assignedRoles.Any() 
+                    ? "Service principal has roles assigned but not Contributor role"
+                    : "No role assignments found for this service principal on the subscription";
+
+            return new AzureRoleCheckResult
+            {
+                IsValid = true,
+                HasContributorRole = hasContributorRole,
+                Message = message,
+                AssignedRoles = assignedRoles
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking subscription roles for credential {CredentialId}", credentialId);
+            
+            return new AzureRoleCheckResult
+            {
+                IsValid = false,
+                HasContributorRole = false,
+                Message = "Error checking subscription roles",
+                ErrorMessage = ex.Message
+            };
         }
     }
 
