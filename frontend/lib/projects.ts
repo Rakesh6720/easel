@@ -77,31 +77,38 @@ class ProjectsService {
         setTimeout(() => {
           // Start with static mock projects
           const allProjects = [...mockProjectsEnhanced];
-          
+
           // Add dynamically created projects from localStorage
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
-            if (key && key.startsWith('test_project_')) {
+            if (key && key.startsWith("test_project_")) {
               try {
                 const projectData = localStorage.getItem(key);
                 if (projectData) {
                   const project = JSON.parse(projectData);
                   // Ensure it's not already in the static list
-                  if (!allProjects.find(p => p.id === project.id)) {
+                  if (!allProjects.find((p) => p.id === project.id)) {
                     allProjects.push(project);
                     // Also restore to memory
                     testUserProjects.set(project.id, project);
                   }
                 }
               } catch (e) {
-                console.warn("Error loading project from localStorage:", key, e);
+                console.warn(
+                  "Error loading project from localStorage:",
+                  key,
+                  e
+                );
               }
             }
           }
-          
+
           // Sort by most recent first
-          allProjects.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          
+          allProjects.sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
           resolve(allProjects);
         }, 300); // Simulate API delay
       });
@@ -132,7 +139,7 @@ class ProjectsService {
             resolve(dynamicProject);
             return;
           }
-          
+
           // Check localStorage for persistence across page reloads
           try {
             const storedProject = localStorage.getItem(`test_project_${id}`);
@@ -145,7 +152,7 @@ class ProjectsService {
           } catch (e) {
             console.warn("Error reading from localStorage:", e);
           }
-          
+
           // Then check static mock data
           const project = mockProjectsEnhanced.find((p) => p.id === id);
           if (project) {
@@ -190,11 +197,14 @@ class ProjectsService {
             resources: [],
             conversations: [],
           };
-          
+
           // Store the project in memory and localStorage for test users
           testUserProjects.set(newProject.id, newProject);
           try {
-            localStorage.setItem(`test_project_${newProject.id}`, JSON.stringify(newProject));
+            localStorage.setItem(
+              `test_project_${newProject.id}`,
+              JSON.stringify(newProject)
+            );
           } catch (e) {
             console.warn("Could not save to localStorage:", e);
           }
@@ -259,7 +269,7 @@ class ProjectsService {
         setTimeout(() => {
           // Check if this is a dynamic project with its own conversations
           let dynamicProject = testUserProjects.get(id);
-          
+
           // If not in memory, check localStorage
           if (!dynamicProject) {
             try {
@@ -273,13 +283,13 @@ class ProjectsService {
               console.warn("Error reading project from localStorage:", e);
             }
           }
-          
+
           // If we found a dynamic project, return its conversations
           if (dynamicProject && dynamicProject.conversations) {
             resolve(dynamicProject.conversations);
             return;
           }
-          
+
           // Otherwise return empty array for new projects
           resolve([]);
         }, 100);
@@ -313,10 +323,10 @@ class ProjectsService {
         setTimeout(() => {
           // Generate a mock AI response
           const mockResponse = `Thank you for your message: "${message}". This is a mock response for your project. I'd be happy to help you refine your requirements further or answer any questions about your Azure resources.`;
-          
+
           // Get the project and add the conversation
           let project = testUserProjects.get(id);
-          
+
           // If not in memory, try to load from localStorage
           if (!project) {
             try {
@@ -329,7 +339,7 @@ class ProjectsService {
               console.warn("Error loading project for conversation:", e);
             }
           }
-          
+
           // Add the conversation to the project
           if (project) {
             const newConversation: ProjectConversation = {
@@ -339,21 +349,24 @@ class ProjectsService {
               aiResponse: mockResponse,
               createdAt: new Date().toISOString(),
             };
-            
+
             if (!project.conversations) {
               project.conversations = [];
             }
             project.conversations.push(newConversation);
-            
+
             // Update in memory and localStorage
             testUserProjects.set(id, project);
             try {
-              localStorage.setItem(`test_project_${id}`, JSON.stringify(project));
+              localStorage.setItem(
+                `test_project_${id}`,
+                JSON.stringify(project)
+              );
             } catch (e) {
               console.warn("Could not save conversation to localStorage:", e);
             }
           }
-          
+
           resolve({ response: mockResponse });
         }, 1000); // Simulate API delay
       });
@@ -493,29 +506,38 @@ class ProjectsService {
           const project = testUserProjects.get(id);
           if (project) {
             // Convert recommendations to resources
-            const newResources: AzureResource[] = recommendations.map((rec, index) => ({
-              id: Date.now() + index,
-              name: rec.name || `Resource ${index + 1}`,
-              resourceType: rec.service || rec.resourceType || rec.type || "Unknown",
-              status: "Provisioning" as const,
-              location: rec.location || "East US",
-              estimatedMonthlyCost: rec.estimatedCost || rec.cost || 0,
-              configuration: rec.configuration || {},
-              createdAt: new Date().toISOString(),
-              provisionedAt: new Date().toISOString(),
-            }));
-            
+            const newResources: AzureResource[] = recommendations.map(
+              (rec, index) => ({
+                id: Date.now() + index,
+                name: rec.name || `Resource ${index + 1}`,
+                resourceType:
+                  rec.service || rec.resourceType || rec.type || "Unknown",
+                status: "Provisioning" as const,
+                location: rec.location || "East US",
+                estimatedMonthlyCost: rec.estimatedCost || rec.cost || 0,
+                configuration: rec.configuration || {},
+                createdAt: new Date().toISOString(),
+                provisionedAt: new Date().toISOString(),
+              })
+            );
+
             // Update the project with new resources
             project.resources = newResources;
             project.status = "Active";
             project.updatedAt = new Date().toISOString();
             testUserProjects.set(id, project);
-            
+
             // Persist to localStorage
             try {
-              localStorage.setItem(`test_project_${id}`, JSON.stringify(project));
+              localStorage.setItem(
+                `test_project_${id}`,
+                JSON.stringify(project)
+              );
             } catch (e) {
-              console.warn("Could not save updated project to localStorage:", e);
+              console.warn(
+                "Could not save updated project to localStorage:",
+                e
+              );
             }
           }
           resolve();
@@ -527,12 +549,15 @@ class ProjectsService {
       console.log("Sending provision request:", {
         url: `${API_BASE_URL}/projects/${id}/provision`,
         data: { recommendations },
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
-      
+
       // Log the exact structure being sent
-      console.log("Recommendations structure:", JSON.stringify(recommendations, null, 2));
-      
+      console.log(
+        "Recommendations structure:",
+        JSON.stringify(recommendations, null, 2)
+      );
+
       await axios.post(
         `${API_BASE_URL}/projects/${id}/provision`,
         { recommendations },
@@ -544,7 +569,7 @@ class ProjectsService {
         console.error("Response data:", error.response?.data);
         console.error("Response status:", error.response?.status);
         console.error("Response headers:", error.response?.headers);
-        
+
         if (error.response?.status === 401) {
           window.location.href = "/login";
           throw new Error("Authentication required");
@@ -561,7 +586,7 @@ class ProjectsService {
         setTimeout(() => {
           // Check if this is a dynamic project with its own resources
           let dynamicProject = testUserProjects.get(id);
-          
+
           // If not in memory, check localStorage
           if (!dynamicProject) {
             try {
@@ -575,46 +600,46 @@ class ProjectsService {
               console.warn("Error reading project from localStorage:", e);
             }
           }
-          
+
           // If we found a dynamic project, return its resources
           if (dynamicProject && dynamicProject.resources) {
             resolve(dynamicProject.resources);
             return;
           }
-          
+
           // Otherwise return static mock resources for predefined projects
           resolve([
-              {
-                id: 1,
-                name: "web-app-eastus",
-                resourceType: "App Service",
-                status: "Active" as
-                  | "Provisioning"
-                  | "Active"
-                  | "Error"
-                  | "Deleted",
-                location: "East US",
-                estimatedMonthlyCost: 73.2,
-                configuration: { tier: "Standard", instances: 1 },
-                createdAt: new Date().toISOString(),
-                provisionedAt: new Date().toISOString(),
-              },
-              {
-                id: 2,
-                name: "sql-db-eastus",
-                resourceType: "Azure SQL Database",
-                status: "Active" as
-                  | "Provisioning"
-                  | "Active"
-                  | "Error"
-                  | "Deleted",
-                location: "East US",
-                estimatedMonthlyCost: 30.0,
-                configuration: { tier: "S2", size: "100GB" },
-                createdAt: new Date().toISOString(),
-                provisionedAt: new Date().toISOString(),
-              },
-            ]);
+            {
+              id: 1,
+              name: "web-app-eastus",
+              resourceType: "App Service",
+              status: "Active" as
+                | "Provisioning"
+                | "Active"
+                | "Error"
+                | "Deleted",
+              location: "East US",
+              estimatedMonthlyCost: 73.2,
+              configuration: { tier: "Standard", instances: 1 },
+              createdAt: new Date().toISOString(),
+              provisionedAt: new Date().toISOString(),
+            },
+            {
+              id: 2,
+              name: "sql-db-eastus",
+              resourceType: "Azure SQL Database",
+              status: "Active" as
+                | "Provisioning"
+                | "Active"
+                | "Error"
+                | "Deleted",
+              location: "East US",
+              estimatedMonthlyCost: 30.0,
+              configuration: { tier: "S2", size: "100GB" },
+              createdAt: new Date().toISOString(),
+              provisionedAt: new Date().toISOString(),
+            },
+          ]);
         }, 300);
       });
     }
@@ -628,6 +653,260 @@ class ProjectsService {
       );
       return response.data;
     } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Authentication required");
+      }
+      throw error;
+    }
+  }
+
+  async retryResource(projectId: number, resourceId: number): Promise<void> {
+    // For test user, simulate retrying the resource
+    if (isTestUser()) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const project = testUserProjects.get(projectId);
+          if (project) {
+            // Find the resource and update its status
+            const resourceIndex = project.resources.findIndex(
+              (r) => r.id === resourceId
+            );
+            if (resourceIndex !== -1) {
+              project.resources[resourceIndex] = {
+                ...project.resources[resourceIndex],
+                status: "Provisioning" as const,
+                provisionedAt: new Date().toISOString(),
+              };
+
+              // Simulate some will succeed, some might fail again
+              setTimeout(() => {
+                const updatedProject = testUserProjects.get(projectId);
+                if (updatedProject) {
+                  const updatedResourceIndex =
+                    updatedProject.resources.findIndex(
+                      (r) => r.id === resourceId
+                    );
+                  if (updatedResourceIndex !== -1) {
+                    // 80% chance of success on retry
+                    const success = Math.random() > 0.2;
+                    updatedProject.resources[updatedResourceIndex] = {
+                      ...updatedProject.resources[updatedResourceIndex],
+                      status: success
+                        ? ("Active" as const)
+                        : ("Error" as const),
+                    };
+                    testUserProjects.set(projectId, updatedProject);
+
+                    // Persist to localStorage
+                    try {
+                      localStorage.setItem(
+                        `test_project_${projectId}`,
+                        JSON.stringify(updatedProject)
+                      );
+                    } catch (e) {
+                      console.warn(
+                        "Could not save updated project to localStorage:",
+                        e
+                      );
+                    }
+                  }
+                }
+              }, 2000); // Simulate retry process taking 2 seconds
+
+              testUserProjects.set(projectId, project);
+
+              // Persist to localStorage
+              try {
+                localStorage.setItem(
+                  `test_project_${projectId}`,
+                  JSON.stringify(project)
+                );
+              } catch (e) {
+                console.warn(
+                  "Could not save updated project to localStorage:",
+                  e
+                );
+              }
+            }
+          }
+          resolve();
+        }, 500); // Short delay to show loading state
+      });
+    }
+
+    // For real users, we'll need to call the backend
+    // Since there's no specific retry endpoint, we'll try to reprovision
+    // by calling the provision endpoint with this resource's configuration
+    try {
+      // First get the current project to find the resource
+      const project = await this.getProject(projectId);
+      const resource = project.resources.find((r) => r.id === resourceId);
+
+      if (!resource) {
+        throw new Error("Resource not found");
+      }
+
+      // Create a recommendation object from the resource
+      // Parse configuration if it's a string (from database)
+      let parsedConfiguration = resource.configuration;
+      if (typeof resource.configuration === "string") {
+        try {
+          parsedConfiguration = JSON.parse(resource.configuration);
+        } catch (e) {
+          console.warn("Failed to parse configuration JSON:", e);
+          parsedConfiguration = {};
+        }
+      }
+
+      const recommendation = {
+        ResourceType: resource.resourceType,
+        Name: resource.name,
+        Location: resource.location,
+        EstimatedMonthlyCost: resource.estimatedMonthlyCost,
+        Configuration: parsedConfiguration,
+        Reasoning: "Retry of failed resource",
+      };
+
+      // Call the provision endpoint with this single resource
+      await axios.post(
+        `${API_BASE_URL}/projects/${projectId}/provision`,
+        { Recommendations: [recommendation] },
+        { headers: this.getAuthHeaders() }
+      );
+
+      console.log("✅ Retry request completed successfully");
+    } catch (error) {
+      console.error("Retry resource error:", error);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Authentication required");
+      }
+      throw error;
+    }
+  }
+
+  async retryAllFailedResources(projectId: number): Promise<void> {
+    // For test user, simulate retrying all failed resources
+    if (isTestUser()) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          const project = testUserProjects.get(projectId);
+          if (project) {
+            // Find all failed resources and update their status
+            project.resources = project.resources.map((resource) => {
+              if (resource.status === "Error") {
+                return {
+                  ...resource,
+                  status: "Provisioning" as const,
+                  provisionedAt: new Date().toISOString(),
+                };
+              }
+              return resource;
+            });
+
+            // Simulate retry process
+            setTimeout(() => {
+              const updatedProject = testUserProjects.get(projectId);
+              if (updatedProject) {
+                updatedProject.resources = updatedProject.resources.map(
+                  (resource) => {
+                    if (resource.status === "Provisioning") {
+                      // 80% chance of success on retry
+                      const success = Math.random() > 0.2;
+                      return {
+                        ...resource,
+                        status: success
+                          ? ("Active" as const)
+                          : ("Error" as const),
+                      };
+                    }
+                    return resource;
+                  }
+                );
+                testUserProjects.set(projectId, updatedProject);
+
+                // Persist to localStorage
+                try {
+                  localStorage.setItem(
+                    `test_project_${projectId}`,
+                    JSON.stringify(updatedProject)
+                  );
+                } catch (e) {
+                  console.warn(
+                    "Could not save updated project to localStorage:",
+                    e
+                  );
+                }
+              }
+            }, 3000); // Simulate retry process taking 3 seconds
+
+            testUserProjects.set(projectId, project);
+
+            // Persist to localStorage
+            try {
+              localStorage.setItem(
+                `test_project_${projectId}`,
+                JSON.stringify(project)
+              );
+            } catch (e) {
+              console.warn(
+                "Could not save updated project to localStorage:",
+                e
+              );
+            }
+          }
+          resolve();
+        }, 500); // Short delay to show loading state
+      });
+    }
+
+    // For real users, get all failed resources and retry them
+    try {
+      const project = await this.getProject(projectId);
+      const failedResources = project.resources.filter(
+        (r) => r.status === "Error"
+      );
+
+      if (failedResources.length === 0) {
+        return;
+      }
+
+      // Create recommendation objects from the failed resources
+      const recommendations = failedResources.map((resource) => {
+        // Parse configuration if it's a string (from database)
+        let parsedConfiguration = resource.configuration;
+        if (typeof resource.configuration === "string") {
+          try {
+            parsedConfiguration = JSON.parse(resource.configuration);
+          } catch (e) {
+            console.warn("Failed to parse configuration JSON:", e);
+            parsedConfiguration = {};
+          }
+        }
+
+        return {
+          ResourceType: resource.resourceType,
+          Name: resource.name,
+          Location: resource.location,
+          EstimatedMonthlyCost: resource.estimatedMonthlyCost,
+          Configuration: parsedConfiguration,
+          Reasoning: "Retry of failed resource",
+        };
+      });
+
+      // Call the provision endpoint with all failed resources
+      await axios.post(
+        `${API_BASE_URL}/projects/${projectId}/provision`,
+        { Recommendations: recommendations },
+        { headers: this.getAuthHeaders() }
+      );
+
+      console.log(
+        "✅ Retry all failed resources request completed successfully"
+      );
+    } catch (error) {
+      console.error("Retry all failed resources error:", error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         window.location.href = "/login";
         throw new Error("Authentication required");

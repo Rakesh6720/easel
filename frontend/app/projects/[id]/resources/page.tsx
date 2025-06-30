@@ -33,6 +33,9 @@ export default function ProjectResourcesPage() {
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryingResources, setRetryingResources] = useState<Set<number>>(
+    new Set()
+  );
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -79,6 +82,52 @@ export default function ProjectResourcesPage() {
 
     fetchResources();
   }, [projectId]);
+
+  const handleRetryResource = async (resourceId: number) => {
+    try {
+      setRetryingResources((prev) => new Set(prev).add(resourceId));
+
+      await projectsService.retryResource(projectId, resourceId);
+
+      // Give the backend a moment to process the request and update the database
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Refresh the resources data to show updated status
+      if (isTestUser()) {
+        const mockResources = getResourcesForProject(projectId);
+        setResources(mockResources);
+      } else {
+        const project = await projectsService.getProject(projectId);
+        if (project?.resources) {
+          const formattedResources = project.resources.map(
+            (resource: AzureResource) => ({
+              id: resource.id,
+              name: resource.name,
+              type: resource.resourceType,
+              status: resource.status,
+              location: resource.location,
+              region: resource.location,
+              resourceGroup: "default-rg", // Not available in API, use default
+              createdAt: resource.createdAt || new Date().toISOString(),
+              cost: resource.estimatedMonthlyCost || 0,
+              azureResourceId: "", // Not available in API
+              configuration: resource.configuration || {},
+            })
+          );
+          setResources(formattedResources);
+        }
+      }
+    } catch (err) {
+      console.error("Error retrying resource:", err);
+      setError("Failed to retry resource");
+    } finally {
+      setRetryingResources((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(resourceId);
+        return newSet;
+      });
+    }
+  };
 
   // Get resources for this project - this is now set by useEffect
   // const resources = getResourcesForProject(parseInt(projectId, 10));
@@ -405,8 +454,12 @@ export default function ProjectResourcesPage() {
                         size="sm"
                         variant="outline"
                         className="border-red-300 text-red-700 hover:bg-red-100"
+                        onClick={() => handleRetryResource(resource.id)}
+                        disabled={retryingResources.has(resource.id)}
                       >
-                        Retry
+                        {retryingResources.has(resource.id)
+                          ? "Retrying..."
+                          : "Retry"}
                       </Button>
                     )}
                   </div>

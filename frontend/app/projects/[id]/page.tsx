@@ -59,6 +59,10 @@ export default function ProjectDetailsPage() {
   const [conversations, setConversations] = useState<ProjectConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryingResources, setRetryingResources] = useState<Set<number>>(
+    new Set()
+  );
+  const [retryingAll, setRetryingAll] = useState(false);
 
   useEffect(() => {
     console.log("Project details page loading, projectId:", projectId);
@@ -96,6 +100,58 @@ export default function ProjectDetailsPage() {
 
     fetchProjectData();
   }, [projectId]);
+
+  const handleRetryResource = async (resourceId: number) => {
+    try {
+      setRetryingResources((prev) => new Set(prev).add(resourceId));
+
+      await projectsService.retryResource(projectId, resourceId);
+
+      // Give the backend a moment to process the request and update the database
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Refresh the project data to show updated resource status
+      const updatedProject = await projectsService.getProject(projectId);
+      const updatedResources = await projectsService.getProjectResources(
+        projectId
+      );
+      setProject(updatedProject);
+      setResources(updatedResources);
+    } catch (err) {
+      console.error("Error retrying resource:", err);
+      setError("Failed to retry resource");
+    } finally {
+      setRetryingResources((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(resourceId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleRetryAllFailed = async () => {
+    try {
+      setRetryingAll(true);
+
+      await projectsService.retryAllFailedResources(projectId);
+
+      // Give the backend a moment to process the request and update the database
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Refresh the project data to show updated resource statuses
+      const updatedProject = await projectsService.getProject(projectId);
+      const updatedResources = await projectsService.getProjectResources(
+        projectId
+      );
+      setProject(updatedProject);
+      setResources(updatedResources);
+    } catch (err) {
+      console.error("Error retrying all failed resources:", err);
+      setError("Failed to retry failed resources");
+    } finally {
+      setRetryingAll(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -368,8 +424,10 @@ export default function ProjectDetailsPage() {
                     size="sm"
                     variant="outline"
                     className="border-red-300 text-red-700 hover:bg-red-100"
+                    onClick={handleRetryAllFailed}
+                    disabled={retryingAll}
                   >
-                    Retry All Failed
+                    {retryingAll ? "Retrying..." : "Retry All Failed"}
                   </Button>
                   <Button
                     size="sm"
@@ -448,8 +506,12 @@ export default function ProjectDetailsPage() {
                             size="sm"
                             variant="outline"
                             className="border-red-300 text-red-700 hover:bg-red-100"
+                            onClick={() => handleRetryResource(resource.id)}
+                            disabled={retryingResources.has(resource.id)}
                           >
-                            Retry
+                            {retryingResources.has(resource.id)
+                              ? "Retrying..."
+                              : "Retry"}
                           </Button>
                         )}
                         <Link

@@ -73,6 +73,7 @@ export default function ResourceDetailPage() {
   const [metrics, setMetrics] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   // Check for tab parameter in URL and set initial tab
   useEffect(() => {
@@ -163,6 +164,78 @@ export default function ResourceDetailPage() {
     fetchResourceData();
   }, [projectId, resourceId]);
 
+  const handleResourceAction = (action: string) => {
+    console.log(`Performing ${action} on resource ${resourceId}`);
+    // This would call the actual Azure management API
+  };
+
+  const handleRetryResource = async () => {
+    try {
+      setRetrying(true);
+
+      await projectsService.retryResource(
+        parseInt(projectId as string),
+        parseInt(resourceId as string)
+      );
+
+      // Refresh the resource data to show updated status
+      const resourceIdNum = parseInt(resourceId as string);
+
+      if (isTestUser()) {
+        const mockResource = getResourceData(resourceIdNum);
+        const mockAlerts = getResourceAlerts(resourceIdNum);
+        const mockLogs = getResourceLogs(resourceIdNum);
+        const mockMetrics = getCurrentMetrics(resourceIdNum);
+
+        if (mockResource) {
+          setResource(mockResource);
+          setAlerts(mockAlerts);
+          setLogs(mockLogs);
+          setMetrics(mockMetrics);
+        }
+      } else {
+        const project = await projectsService.getProject(
+          parseInt(projectId as string)
+        );
+        const foundResource = project?.resources?.find(
+          (r) => r.id === resourceIdNum
+        );
+
+        if (foundResource) {
+          const formattedResource = {
+            id: foundResource.id,
+            name: foundResource.name,
+            type: foundResource.resourceType,
+            status: foundResource.status,
+            location: foundResource.location,
+            region: foundResource.location,
+            cost: foundResource.estimatedMonthlyCost || 0,
+            lastUpdated: foundResource.provisionedAt || foundResource.createdAt,
+            createdAt: foundResource.createdAt,
+            resourceGroup: "default-rg",
+            subscription: "default-subscription",
+            azureResourceId: "",
+            configuration: foundResource.configuration || {},
+          };
+          setResource(formattedResource);
+          setAlerts([]);
+          setLogs([]);
+          setMetrics({
+            cpu: { current: 0, average: 0, max: 0 },
+            memory: { current: 0, average: 0, max: 0 },
+            requests: { current: 0, total: 0, errorsToday: 0 },
+            responseTime: { current: 0, average: 0, p95: 0 },
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Error retrying resource:", err);
+      setError("Failed to retry resource");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -193,11 +266,6 @@ export default function ResourceDetailPage() {
       </div>
     );
   }
-
-  const handleResourceAction = (action: string) => {
-    console.log(`Performing ${action} on resource ${resourceId}`);
-    // This would call the actual Azure management API
-  };
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },

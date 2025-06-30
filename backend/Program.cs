@@ -29,7 +29,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
 
 // Azure services
 builder.Services.AddSingleton<DefaultAzureCredential>();
-builder.Services.AddScoped<IAzureResourceService, ProductionAzureResourceService>();
+builder.Services.AddScoped<IAzureResourceService, MockAzureResourceService>();
 builder.Services.AddScoped<IAzureMonitoringService, AzureMonitoringService>();
 
 // AI services
