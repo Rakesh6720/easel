@@ -11,6 +11,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   ArrowLeft,
   Settings,
   Play,
@@ -50,10 +58,11 @@ import { azureService, type AzureCredential } from "@/lib/azure";
 import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 export default function ProjectDetailsPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = parseInt(params.id as string, 10);
 
   const [project, setProject] = useState<Project | null>(null);
@@ -67,6 +76,9 @@ export default function ProjectDetailsPage() {
   const [retryingAll, setRetryingAll] = useState(false);
   const [azureCredentials, setAzureCredentials] = useState<AzureCredential[]>([]);
   const [assigningCredential, setAssigningCredential] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     console.log("Project details page loading, projectId:", projectId);
@@ -177,6 +189,42 @@ export default function ProjectDetailsPage() {
       setError("Failed to assign Azure credential");
     } finally {
       setAssigningCredential(false);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      // First call to get confirmation details
+      const confirmationData = await projectsService.deleteProject(projectId, false);
+      setDeleteConfirmation(confirmationData);
+      setShowDeleteDialog(true);
+    } catch (err) {
+      console.error("Error getting delete confirmation:", err);
+      setError("Failed to prepare project deletion");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      setDeleting(true);
+      setError(null);
+      
+      // Second call to perform actual deletion
+      await projectsService.deleteProject(projectId, true);
+      
+      // Navigate back to projects list
+      router.push("/projects");
+    } catch (err) {
+      console.error("Error deleting project:", err);
+      setError("Failed to delete project");
+      setShowDeleteDialog(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -293,9 +341,14 @@ export default function ProjectDetailsPage() {
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </Button>
-          <Button variant="destructive" size="sm">
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleDeleteProject}
+            disabled={deleting}
+          >
             <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            {deleting ? "Loading..." : "Delete"}
           </Button>
         </div>
       </div>
@@ -681,6 +734,48 @@ export default function ProjectDetailsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this project? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteConfirmation && (
+            <div className="space-y-4">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <h4 className="font-semibold text-red-800 mb-2">
+                  "{deleteConfirmation.projectName}"
+                </h4>
+                <div className="text-sm text-red-700 space-y-1">
+                  <p>• {deleteConfirmation.resourceCount} resources will be affected</p>
+                  <p>• Estimated monthly cost: {formatCurrency(deleteConfirmation.estimatedMonthlyCost)}</p>
+                  <p className="mt-2 text-xs">{deleteConfirmation.message}</p>
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowDeleteDialog(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleConfirmDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? "Deleting..." : "Delete Project"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

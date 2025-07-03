@@ -253,6 +253,70 @@ class ProjectsService {
   }
 
   async deleteProject(id: number, confirmed: boolean = false): Promise<any> {
+    // Handle test user project deletion
+    if (isTestUser()) {
+      return new Promise((resolve, reject) => {
+        try {
+          // First call: return confirmation details
+          if (!confirmed) {
+            // Find the project to get details
+            let projectToDelete = testUserProjects.get(id);
+            
+            // If not in memory, check localStorage
+            if (!projectToDelete) {
+              const storedProject = localStorage.getItem(`test_project_${id}`);
+              if (storedProject) {
+                projectToDelete = JSON.parse(storedProject);
+              }
+            }
+            
+            // Check if it's a static mock project
+            if (!projectToDelete) {
+              const staticProject = mockProjectsEnhanced.find(p => p.id === id);
+              if (staticProject) {
+                resolve({
+                  confirmed: false,
+                  projectName: staticProject.name,
+                  resourceCount: staticProject.resources?.length || 0,
+                  resources: staticProject.resources || [],
+                  estimatedMonthlyCost: staticProject.resources?.reduce((sum, r) => sum + (r.estimatedMonthlyCost || 0), 0) || 0,
+                  message: "This is a demo project. Deletion will only affect your local session."
+                });
+                return;
+              }
+            }
+            
+            if (projectToDelete) {
+              resolve({
+                confirmed: false,
+                projectName: projectToDelete.name,
+                resourceCount: projectToDelete.resources?.length || 0,
+                resources: projectToDelete.resources || [],
+                estimatedMonthlyCost: projectToDelete.resources?.reduce((sum, r) => sum + (r.estimatedMonthlyCost || 0), 0) || 0,
+                message: "This project will be removed from your local session."
+              });
+            } else {
+              reject(new Error("Project not found"));
+            }
+          } else {
+            // Second call: perform actual deletion
+            // Remove from memory
+            testUserProjects.delete(id);
+            
+            // Remove from localStorage
+            localStorage.removeItem(`test_project_${id}`);
+            
+            resolve({
+              confirmed: true,
+              message: "Project deleted successfully"
+            });
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
     try {
       const response = await axios.delete(
         `${API_BASE_URL}/projects/${id}?confirmed=${confirmed}`,
