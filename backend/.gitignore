@@ -19,6 +19,7 @@ bld/
 [Oo]bj/
 
 # SENSITIVE FILES - NEVER COMMIT THESE
+appsettings.json
 appsettings.Development.json
 appsettings.Local.json
 appsettings.Production.json
@@ -29,6 +30,11 @@ appsettings.Production.json
 *.p12
 secrets.json
 user-secrets/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
 
 # Visual Studio
 .vs/
