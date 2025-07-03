@@ -22,6 +22,59 @@ interface Conversation {
   createdAt: string;
 }
 
+const formatAIMessage = (message: string) => {
+  if (!message) return null;
+  
+  return message.split('\n').map((line, index) => {
+    const trimmedLine = line.trim();
+    
+    // Skip empty lines
+    if (!trimmedLine) return null;
+    
+    // Handle section headers (lines starting with ### or **)
+    if (trimmedLine.startsWith('###') || (trimmedLine.startsWith('**') && trimmedLine.endsWith('**'))) {
+      return (
+        <div key={index} className="mt-3 first:mt-0">
+          <h4 className="font-semibold text-blue-700 mb-1 text-sm">
+            {trimmedLine.replace(/###\s*|\*\*/g, '')}
+          </h4>
+        </div>
+      );
+    }
+    
+    // Handle numbered list items (1. 2. etc.)
+    if (/^\d+\.\s/.test(trimmedLine)) {
+      return (
+        <div key={index} className="ml-4 flex items-start mt-1">
+          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1.5 mr-2 flex-shrink-0"></div>
+          <p className="text-sm leading-relaxed">
+            {trimmedLine.replace(/^\d+\.\s*/, '')}
+          </p>
+        </div>
+      );
+    }
+    
+    // Handle bullet points (lines starting with -)
+    if (trimmedLine.startsWith('- ')) {
+      return (
+        <div key={index} className="ml-6 flex items-start mt-1">
+          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1.5 mr-2 flex-shrink-0"></div>
+          <p className="text-sm leading-relaxed">
+            {trimmedLine.substring(2)}
+          </p>
+        </div>
+      );
+    }
+    
+    // Handle regular paragraphs
+    return (
+      <p key={index} className="text-sm leading-relaxed mt-1 first:mt-0">
+        {trimmedLine}
+      </p>
+    );
+  }).filter(Boolean);
+};
+
 export default function ProjectChatPage() {
   console.log("ProjectChatPage component rendering");
   
@@ -168,12 +221,8 @@ export default function ProjectChatPage() {
                       <p className="text-sm font-medium mb-2">
                         {project.processedRequirements ? "My Analysis:" : "Your Requirements:"}
                       </p>
-                      <div className="text-sm text-gray-700 space-y-1">
-                        {(project.processedRequirements || project.userRequirements)
-                          .split("\n")
-                          .map((line: string, index: number) => (
-                            <p key={index}>{line}</p>
-                          ))}
+                      <div className="text-sm text-gray-700 space-y-2">
+                        {formatAIMessage(project.processedRequirements || project.userRequirements)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
                         Easel AI • {project.processedRequirements ? "Project Analysis" : "Based on your input"}
@@ -223,7 +272,9 @@ export default function ProjectChatPage() {
                     
                     <div className="flex justify-start">
                       <div className="bg-muted rounded-lg p-3 max-w-[70%]">
-                        <p className="text-sm">{conv.aiResponse || 'No response available'}</p>
+                        <div className="text-sm space-y-1">
+                          {formatAIMessage(conv.aiResponse || 'No response available')}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           Easel AI • {conv.createdAt ? new Date(conv.createdAt).toLocaleTimeString() : 'Just now'}
                         </p>

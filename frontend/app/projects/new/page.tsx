@@ -68,6 +68,45 @@ export default function NewProjectPage() {
   const [conversation, setConversation] = useState<Array<{role: 'user' | 'assistant', message: string}>>([])
   const [currentMessage, setCurrentMessage] = useState('')
 
+  const formatAIMessage = (message: string) => {
+    return message.split('\n').map((line, index) => {
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines
+      if (!trimmedLine) return null;
+      
+      // Handle section headers (lines starting with **)
+      if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+        return (
+          <div key={index} className="mt-3 first:mt-0">
+            <h5 className="font-semibold text-azure-blue mb-1 text-sm">
+              {trimmedLine.replace(/\*\*/g, '')}
+            </h5>
+          </div>
+        );
+      }
+      
+      // Handle bullet points (lines starting with -)
+      if (trimmedLine.startsWith('- ')) {
+        return (
+          <div key={index} className="ml-3 flex items-start mt-1">
+            <div className="w-1.5 h-1.5 bg-azure-blue rounded-full mt-1.5 mr-2 flex-shrink-0"></div>
+            <p className="text-sm leading-relaxed">
+              {trimmedLine.substring(2)}
+            </p>
+          </div>
+        );
+      }
+      
+      // Handle regular paragraphs
+      return (
+        <p key={index} className="text-sm leading-relaxed mt-1 first:mt-0">
+          {trimmedLine}
+        </p>
+      );
+    }).filter(Boolean);
+  };
+
   const handleInitialSubmit = async () => {
     if (!projectData.name || !projectData.requirements || !projectData.azureCredentialId) return
     
@@ -78,59 +117,36 @@ export default function NewProjectPage() {
       // Create the project via API service
       const project = await projectsService.createProject({
         name: projectData.name,
-        userRequirements: projectData.requirements
+        userRequirements: projectData.requirements,
+        azureCredentialId: projectData.azureCredentialId
       })
       
       // Use the real project data
-      setAnalysisResult(`Based on your requirements for "${project.name}", I've analyzed the following:
+      setAnalysisResult(`Based on your requirements for "${project.name}", I need to understand your architecture better to provide the best Azure resource recommendations.
 
-**Application Type**: ${projectData.requirements.toLowerCase().includes('web') ? 'Web Application' : 'Backend Service'}
-**Expected Scale**: Medium traffic application
-**Key Components Needed**:
-- User authentication and management
-- Database for data storage
-- API endpoints for frontend communication
-- Hosting infrastructure
+**Initial Assessment**:
+Your project appears to need cloud infrastructure, but I'd like to clarify the specific architecture you have in mind.
 
-**Recommended Azure Resources**:
-- App Service for hosting
-- Azure SQL Database for data storage
-- Azure Storage Account for files/assets
-- Application Insights for monitoring
+**Next Steps**:
+I'll ask you a few questions in the conversation below to understand:
+- What type of application architecture you're building
+- Your expected scale and performance needs
+- Any specific requirements or constraints
 
-Would you like me to ask some follow-up questions to refine these recommendations?`)
+This will help me recommend the most suitable Azure services for your specific use case.`)
       
       // Store the project ID for later use
       sessionStorage.setItem('currentProjectId', project.id.toString())
       
-      // Initialize conversation with the analysis result
+      // Initialize conversation with a welcoming message
       setConversation([
         {
           role: 'assistant',
-          message: `Based on your requirements for "${project.name}", I've analyzed the following:
+          message: `Hi! I've done an initial analysis of your "${project.name}" project requirements. 
 
-**Application Type**: ${projectData.requirements.toLowerCase().includes('web') ? 'Web Application' : 'Backend Service'}
-**Expected Scale**: Medium traffic application
-**Key Components Needed**:
-- User authentication and management
-- Database for data storage
-- API endpoints for frontend communication
-- Hosting infrastructure
+To give you the best Azure resource recommendations, what type of application architecture are you building?
 
-**Recommended Azure Resources**:
-- App Service for hosting
-- Azure SQL Database for data storage
-- Azure Storage Account for files/assets
-- Application Insights for monitoring
-
-Would you like me to ask some follow-up questions to refine these recommendations?
-
-**Questions to help me refine your setup:**
-- What's your expected user load or traffic volume?
-- Do you have any specific performance requirements?
-- Are there compliance or security requirements?
-- What's your preferred budget range?
-- Do you need high availability or disaster recovery?`
+For example: web application, API gateway, microservices, data processing platform, or something else?`
         }
       ])
       
@@ -144,20 +160,150 @@ Would you like me to ask some follow-up questions to refine these recommendation
     }
   }
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!currentMessage.trim()) return
 
-    const newConversation = [
-      ...conversation,
-      { role: 'user' as const, message: currentMessage },
-      { 
-        role: 'assistant' as const, 
-        message: "Thank you for the additional information. Based on your clarification, I'll adjust the resource recommendations to better fit your specific needs. Let me know if you have any other requirements or questions!"
+    // Add user message immediately
+    const userMessage = currentMessage;
+    setConversation(prev => [...prev, { role: 'user' as const, message: userMessage }]);
+    setCurrentMessage('');
+
+    try {
+      // Get the project ID from sessionStorage
+      const currentProjectId = sessionStorage.getItem('currentProjectId');
+      if (!currentProjectId) {
+        throw new Error('Project ID not found');
       }
-    ]
+      
+      // Call the AI service to get a proper response
+      const response = await projectsService.addConversation(parseInt(currentProjectId), userMessage);
+      
+      // Add AI response to conversation
+      setConversation(prev => [...prev, { 
+        role: 'assistant' as const, 
+        message: response.aiResponse || response.message || "I'll help you refine your requirements."
+      }]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      
+      // Provide a smart fallback response based on the user's question
+      const fallbackResponse = generateSmartFallbackResponse(userMessage, projectData);
+      
+      setConversation(prev => [...prev, { 
+        role: 'assistant' as const, 
+        message: fallbackResponse
+      }]);
+    }
+  }
+
+  const generateSmartFallbackResponse = (userMessage: string, projectData: ProjectData) => {
+    const message = userMessage.toLowerCase();
     
-    setConversation(newConversation)
-    setCurrentMessage('')
+    // Handle user load responses (thousands, hundreds, etc.)
+    if (message.includes('thousand') || message.includes('1000') || message.includes('many') || message.includes('lots') || message.includes('hopefully')) {
+      return `Excellent! For thousands of users, you'll need a robust architecture:
+
+**Recommended Configuration:**
+- **Azure App Service** (Standard or Premium tier) with auto-scaling
+- **Azure SQL Database** (Standard tier) with read replicas
+- **Azure CDN** for global content delivery
+- **Azure Redis Cache** for session management and performance
+- **Application Insights** for monitoring high-traffic scenarios
+
+**Estimated Monthly Cost:** $200-500 for this scale
+
+**Next Steps:**
+Would you like me to help you plan for specific features like user authentication, file uploads, or real-time messaging?`;
+    }
+    
+    // Handle small scale responses
+    if (message.includes('hundred') || message.includes('small') || message.includes('few') || message.includes('starting')) {
+      return `Perfect for getting started! For hundreds of users:
+
+**Cost-Effective Setup:**
+- **Azure App Service** (Basic tier) - $13-55/month
+- **Azure SQL Database** (Basic tier) - $5-15/month
+- **Azure Storage Account** - $1-10/month
+
+**Total Estimated Cost:** $20-80/month
+
+This setup can easily scale up as your user base grows. What features are most important for your startup platform?`;
+    }
+    
+    // Handle web app responses
+    if (message.includes('web app') || message.includes('web application') || message.includes('website')) {
+      return `Perfect! For a web application like "${projectData.name}", here's what I recommend:
+
+**Core Azure Resources:**
+- **Azure App Service** - Host your web application with auto-scaling
+- **Azure SQL Database** - Store user data and application content
+- **Azure Storage Account** - Handle file uploads and static assets
+
+**Additional Services:**
+- **Azure CDN** - Fast content delivery globally
+- **Application Insights** - Monitor performance and user behavior
+
+**Estimated Monthly Cost:** $100-300 depending on traffic
+
+What's your expected user load - hundreds or thousands of users?`;
+    }
+    
+    // Handle API Gateway responses
+    if (message.includes('api gateway') || message.includes('load balancer') || message.includes('microservice')) {
+      return `Great choice! For an API Gateway architecture, I'd recommend:
+
+**Core Services:**
+- **Azure API Management** - Central API gateway with security and throttling
+- **Azure Application Gateway** - Load balancer with WAF protection
+- **Azure App Services** - Host your backend APIs
+
+How many backend services are you planning to connect?`;
+    }
+    
+    // Handle feature-specific questions
+    if (message.includes('feature') || message.includes('auth') || message.includes('upload') || message.includes('messaging')) {
+      return `Great question! For a startup platform with thousands of users, here are key feature recommendations:
+
+**User Authentication:**
+- **Azure Active Directory B2C** - Scalable user identity management
+
+**File & Media Handling:**
+- **Azure Blob Storage** - Profile pictures, documents
+- **Azure Media Services** - Video content (if needed)
+
+**Real-time Features:**
+- **Azure SignalR** - Live messaging, notifications
+- **Azure Service Bus** - Background job processing
+
+Would you like me to dive deeper into any of these features?`;
+    }
+    
+    // Handle resource recommendation questions
+    if (message.includes('resource') || message.includes('recommend')) {
+      return `I'd love to help you choose the right Azure resources for "${projectData.name}"! 
+
+What type of architecture are you thinking about - web app, API gateway, microservices, or something else?`;
+    }
+    
+    // Handle budget questions
+    if (message.includes('budget') || message.includes('cost') || message.includes('price')) {
+      return `Here are typical Azure costs for "${projectData.name}":
+
+**Small project:** $50-150/month (Basic tiers)
+**Medium project:** $150-500/month (Standard tiers)
+**Large project:** $500+/month (Premium + extras)
+
+What's your target budget range?`;
+    }
+    
+    // Default response - be more conversational
+    return `That's helpful context! For "${projectData.name}" with thousands of users, I'd recommend focusing on:
+
+**Scalability** - Services that can grow with your user base
+**Performance** - Fast response times for a great user experience  
+**Cost optimization** - Smart resource choices for a startup budget
+
+What aspect would you like to explore first - the core infrastructure, specific features, or cost planning?`;
   }
 
   const handleGenerateRecommendations = () => {
@@ -350,16 +496,43 @@ Would you like me to ask some follow-up questions to refine these recommendation
                       <Sparkles className="mr-2 h-5 w-5 text-azure-blue" />
                       AI Analysis Result
                     </h3>
-                    <div className="prose prose-sm max-w-none">
-                      {analysisResult.split('\n').map((line, index) => (
-                        <p key={index} className="mb-2 last:mb-0">
-                          {line.startsWith('**') ? (
-                            <strong>{line.replace(/\*\*/g, '')}</strong>
-                          ) : (
-                            line
-                          )}
-                        </p>
-                      ))}
+                    <div className="space-y-4">
+                      {analysisResult.split('\n').map((line, index) => {
+                        const trimmedLine = line.trim();
+                        
+                        // Skip empty lines
+                        if (!trimmedLine) return null;
+                        
+                        // Handle section headers (lines starting with **)
+                        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+                          return (
+                            <div key={index} className="mt-4 first:mt-0">
+                              <h4 className="font-semibold text-azure-blue mb-2">
+                                {trimmedLine.replace(/\*\*/g, '')}
+                              </h4>
+                            </div>
+                          );
+                        }
+                        
+                        // Handle bullet points (lines starting with -)
+                        if (trimmedLine.startsWith('- ')) {
+                          return (
+                            <div key={index} className="ml-4 flex items-start">
+                              <div className="w-2 h-2 bg-azure-blue rounded-full mt-2 mr-3 flex-shrink-0"></div>
+                              <p className="text-gray-700 leading-relaxed">
+                                {trimmedLine.substring(2)}
+                              </p>
+                            </div>
+                          );
+                        }
+                        
+                        // Handle regular paragraphs
+                        return (
+                          <p key={index} className="text-gray-700 leading-relaxed">
+                            {trimmedLine}
+                          </p>
+                        );
+                      }).filter(Boolean)}
                     </div>
                   </div>
                   
@@ -401,7 +574,13 @@ Would you like me to ask some follow-up questions to refine these recommendation
                             ? 'bg-azure-blue text-white' 
                             : 'bg-white border'
                         }`}>
-                          {msg.message}
+                          {msg.role === 'assistant' ? (
+                            <div className="space-y-1">
+                              {formatAIMessage(msg.message)}
+                            </div>
+                          ) : (
+                            msg.message
+                          )}
                         </div>
                       </div>
                     ))}

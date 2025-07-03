@@ -13,6 +13,8 @@ using Azure.ResourceManager.Redis;
 using Azure.ResourceManager.Redis.Models;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Authorization.Models;
+using Azure.ResourceManager.CosmosDB;
+using Azure.ResourceManager.CosmosDB.Models;
 using backend.Models;
 using backend.Data;
 using Microsoft.EntityFrameworkCore;
@@ -205,8 +207,8 @@ public class ProductionAzureResourceService : IAzureResourceService
             
             if (project?.UserAzureCredential == null)
             {
-                _logger.LogError("Project {ProjectId} has no Azure credentials configured", projectId);
-                return false;
+                _logger.LogError("Project {ProjectId} has no Azure credentials configured. Cannot provision resources without Azure credentials.", projectId);
+                throw new InvalidOperationException($"Project {projectId} has no Azure credentials configured. Please assign Azure credentials to this project before provisioning resources.");
             }
 
             if (!project.UserAzureCredential.IsActive)
@@ -333,8 +335,9 @@ public class ProductionAzureResourceService : IAzureResourceService
                 "microsoft.storage/storageaccounts" => await ProvisionStorageAccountAsync(resourceGroup, azureResource, recommendation),
                 "microsoft.sql/servers/databases" => await ProvisionSqlDatabaseAsync(resourceGroup, azureResource, recommendation),
                 "microsoft.web/serverfarms" => await ProvisionAppServicePlanAsync(resourceGroup, azureResource, recommendation),
-                "microsoft.insights/components" => await Task.FromResult(false), // ProvisionApplicationInsightsAsync(resourceGroup, azureResource, recommendation),
-                "microsoft.cache/redis" => await Task.FromResult(false), // ProvisionRedisCacheAsync(resourceGroup, azureResource, recommendation),
+                "microsoft.insights/components" => await ProvisionApplicationInsightsAsync(resourceGroup, azureResource, recommendation),
+                "microsoft.cache/redis" => await Task.FromResult(false), // Redis provisioning disabled due to SDK issues
+                "microsoft.cosmosdb/databaseaccounts" => await ProvisionCosmosDBAsync(resourceGroup, azureResource, recommendation),
                 _ => await ProvisionGenericResourceAsync(resourceGroup, azureResource, recommendation)
             };
 
@@ -423,19 +426,33 @@ public class ProductionAzureResourceService : IAzureResourceService
             var webSiteCollection = resourceGroup.GetWebSites();
             var config = JsonSerializer.Deserialize<AppServiceConfig>(azureResource.Configuration) ?? new AppServiceConfig();
             
+            _logger.LogInformation("App Service configuration: {Config}", JsonSerializer.Serialize(config));
+            
             // Create App Service Plan first if not specified
             var planName = config.ServicePlanName ?? $"{recommendation.Name}-plan";
             var planCollection = resourceGroup.GetAppServicePlans();
             
+            // Force Free tier for all App Services to avoid quota issues
+            var skuName = "F1";
+            var skuTier = "Free";
+            var skuSize = "F1";
+            var skuFamily = "F";
+            
+            _logger.LogWarning("Forcing Free tier for App Service {ServiceName} to avoid quota issues. Original config: {OriginalConfig}", 
+                recommendation.Name, JsonSerializer.Serialize(config.Sku));
+            
+            _logger.LogInformation("Using SKU values - Name: {Name}, Tier: {Tier}, Size: {Size}, Family: {Family}", 
+                skuName, skuTier, skuSize, skuFamily);
+
             var planData = new AppServicePlanData(recommendation.Location)
             {
                 Sku = new AppServiceSkuDescription
                 {
-                    Name = config.Sku?.Name ?? "B1",
-                    Tier = config.Sku?.Tier ?? "Basic",
-                    Size = config.Sku?.Size ?? "B1",
-                    Family = config.Sku?.Family ?? "B",
-                    Capacity = config.Sku?.Capacity ?? 1
+                    Name = skuName,
+                    Tier = skuTier,
+                    Size = skuSize,
+                    Family = skuFamily,
+                    Capacity = 1
                 },
                 Kind = "app"
             };
@@ -467,6 +484,12 @@ public class ProductionAzureResourceService : IAzureResourceService
             
             _logger.LogInformation("Successfully provisioned App Service {SiteName}", recommendation.Name);
             return true;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 401 && ex.Message.Contains("quota"))
+        {
+            _logger.LogWarning("App Service provisioning failed due to quota limits: {Error}", ex.Message);
+            _logger.LogInformation("Consider using Azure Container Apps or Azure Functions for serverless hosting alternatives");
+            return false;
         }
         catch (Exception ex)
         {
@@ -555,14 +578,41 @@ public class ProductionAzureResourceService : IAzureResourceService
                     }
                 };
                 
-                var retryOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, serverName, serverData);
+                try
+                {
+                    var retryOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, serverName, serverData);
+                    server = retryOperation.Value;
+                    _logger.LogInformation("Successfully created SQL Server {ServerName} in fallback region West US 2", serverName);
+                }
+                catch (Azure.RequestFailedException ex2) when (ex2.Status == 409 && (ex2.ErrorCode == "InvalidResourceLocation" || ex2.Message.Contains("already exists")))
+                {
+                    _logger.LogWarning("SQL Server name conflict in fallback region, trying with unique name for {ServerName}", serverName);
+                    
+                    // Generate a unique name with timestamp
+                    var uniqueServerName = $"{serverName}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                    _logger.LogInformation("Retrying SQL Server creation with name {UniqueServerName} in West US 2", uniqueServerName);
+                    
+                    var uniqueRetryOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, uniqueServerName, serverData);
+                    server = uniqueRetryOperation.Value;
+                    _logger.LogInformation("Successfully created SQL Server {UniqueServerName} with unique name in West US 2", uniqueServerName);
+                }
+            }
+            catch (Azure.RequestFailedException ex) when (ex.Status == 409 && (ex.ErrorCode == "InvalidResourceLocation" || ex.Message.Contains("already exists")))
+            {
+                _logger.LogWarning("SQL Server name conflict, trying with unique name for {ServerName}. Error: {Error}", serverName, ex.Message);
+                
+                // Generate a unique name with timestamp
+                var uniqueServerName = $"{serverName}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                _logger.LogInformation("Retrying SQL Server creation with name {UniqueServerName}", uniqueServerName);
+                
+                var retryOperation = await sqlServerCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, uniqueServerName, serverData);
                 server = retryOperation.Value;
-                _logger.LogInformation("Successfully created SQL Server {ServerName} in fallback region West US 2", serverName);
+                _logger.LogInformation("Successfully created SQL Server {UniqueServerName} with unique name", uniqueServerName);
             }
 
-            // Create the database
+            // Create the database (inherits location from server)
             var databaseCollection = server.GetSqlDatabases();
-            var databaseData = new SqlDatabaseData(recommendation.Location)
+            var databaseData = new SqlDatabaseData(server.Data.Location)
             {
                 Sku = new SqlSku(config.Sku?.Name ?? "Basic")
                 {
@@ -580,6 +630,12 @@ public class ProductionAzureResourceService : IAzureResourceService
             
             _logger.LogInformation("Successfully provisioned SQL Database {DatabaseName}", recommendation.Name);
             return true;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.ErrorCode == "ProvisioningDisabled")
+        {
+            _logger.LogWarning("SQL Database provisioning disabled in this region: {Error}", ex.Message);
+            _logger.LogInformation("Consider using Azure Cosmos DB or Azure Database for PostgreSQL as alternatives");
+            return false;
         }
         catch (Exception ex)
         {
@@ -626,6 +682,12 @@ public class ProductionAzureResourceService : IAzureResourceService
             _logger.LogInformation("Successfully created Application Insights {ComponentName}", recommendation.Name);
             return true;
         }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 409 && ex.Message.Contains("Failed to register resource provider"))
+        {
+            _logger.LogWarning("Application Insights resource provider not registered: {Error}", ex.Message);
+            _logger.LogInformation("The subscription needs to register the microsoft.operationalinsights resource provider for Application Insights");
+            return false;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to provision Application Insights {ComponentName}", recommendation.Name);
@@ -633,13 +695,15 @@ public class ProductionAzureResourceService : IAzureResourceService
         }
     }
 
+    /*
     private async Task<bool> ProvisionRedisCacheAsync(ResourceGroupResource resourceGroup, AzureResource azureResource, AzureResourceRecommendation recommendation)
     {
         // Redis provisioning disabled due to Azure SDK compatibility issues
         _logger.LogWarning("Redis Cache provisioning is disabled in this build");
-        await Task.CompletedTask; // Fix async warning
+        await Task.CompletedTask;
         return false;
     }
+    */
 
     private async Task<bool> ProvisionGenericResourceAsync(ResourceGroupResource resourceGroup, AzureResource azureResource, AzureResourceRecommendation recommendation)
     {
@@ -766,6 +830,9 @@ public class ProductionAzureResourceService : IAzureResourceService
                 "microsoft.storage/storageaccounts" => await DeleteStorageAccountAsync(resourceGroup, azureResource),
                 "microsoft.sql/servers/databases" => await DeleteSqlDatabaseAsync(resourceGroup, azureResource),
                 "microsoft.web/serverfarms" => await DeleteAppServicePlanAsync(resourceGroup, azureResource),
+                "microsoft.insights/components" => await DeleteApplicationInsightsAsync(resourceGroup, azureResource),
+                "microsoft.cache/redis" => await Task.FromResult(false), // Redis deletion disabled
+                "microsoft.cosmosdb/databaseaccounts" => await DeleteCosmosDBAsync(resourceGroup, azureResource),
                 _ => await DeleteGenericResourceAsync(resourceGroup, azureResource)
             };
 
@@ -864,6 +931,36 @@ public class ProductionAzureResourceService : IAzureResourceService
         }
     }
 
+    private async Task<bool> DeleteApplicationInsightsAsync(ResourceGroupResource resourceGroup, AzureResource azureResource)
+    {
+        try
+        {
+            var componentsCollection = resourceGroup.GetApplicationInsightsComponents();
+            var component = await componentsCollection.GetAsync(azureResource.Name);
+            
+            _logger.LogInformation("Deleting Application Insights {ComponentName}", azureResource.Name);
+            await component.Value.DeleteAsync(Azure.WaitUntil.Completed);
+            
+            _logger.LogInformation("Successfully deleted Application Insights {ComponentName}", azureResource.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete Application Insights {ComponentName}", azureResource.Name);
+            return false;
+        }
+    }
+    
+    /*
+    private async Task<bool> DeleteRedisCacheAsync(ResourceGroupResource resourceGroup, AzureResource azureResource)
+    {
+        // Redis deletion disabled due to Azure SDK compatibility issues
+        _logger.LogWarning("Redis Cache deletion is disabled in this build");
+        await Task.CompletedTask;
+        return false;
+    }
+    */
+
     private async Task<bool> DeleteGenericResourceAsync(ResourceGroupResource resourceGroup, AzureResource azureResource)
     {
         try
@@ -893,6 +990,9 @@ public class ProductionAzureResourceService : IAzureResourceService
             "microsoft.storage/storageaccounts" => "Storage Account",
             "microsoft.sql/servers/databases" => "SQL Database",
             "microsoft.web/serverfarms" => "App Service Plan",
+            "microsoft.insights/components" => "Application Insights",
+            "microsoft.cache/redis" => "Redis Cache",
+            "microsoft.cosmosdb/databaseaccounts" => "Cosmos DB",
             _ => "Azure Resource"
         };
     }
@@ -905,6 +1005,9 @@ public class ProductionAzureResourceService : IAzureResourceService
             "microsoft.storage/storageaccounts" => "⚠️ This will permanently delete all stored data including blobs, files, queues, and tables.",
             "microsoft.sql/servers/databases" => "⚠️ This will permanently delete the database and all its data.",
             "microsoft.web/serverfarms" => "⚠️ This will delete the hosting plan. Ensure no web apps are still using this plan.",
+            "microsoft.insights/components" => "⚠️ This will delete Application Insights monitoring data and configuration.",
+            "microsoft.cache/redis" => "⚠️ This will permanently delete the Redis cache and all cached data.",
+            "microsoft.cosmosdb/databaseaccounts" => "⚠️ This will permanently delete the Cosmos DB account and all databases and data.",
             _ => "⚠️ This will permanently delete the Azure resource and all associated data."
         };
     }
@@ -940,6 +1043,76 @@ public class ProductionAzureResourceService : IAzureResourceService
         };
     }
     */
+    
+    private async Task<bool> ProvisionCosmosDBAsync(ResourceGroupResource resourceGroup, AzureResource azureResource, AzureResourceRecommendation recommendation)
+    {
+        try
+        {
+            var cosmosCollection = resourceGroup.GetCosmosDBAccounts();
+            var config = JsonSerializer.Deserialize<CosmosDBConfig>(azureResource.Configuration) ?? new CosmosDBConfig();
+            
+            var locations = new List<CosmosDBAccountLocation>
+            {
+                new CosmosDBAccountLocation()
+                {
+                    LocationName = recommendation.Location,
+                    FailoverPriority = 0,
+                    IsZoneRedundant = false
+                }
+            };
+            
+            var cosmosData = new CosmosDBAccountCreateOrUpdateContent(recommendation.Location, locations)
+            {
+                DatabaseAccountOfferType = CosmosDBAccountOfferType.Standard,
+                IsVirtualNetworkFilterEnabled = false,
+                EnableAutomaticFailover = false,
+                ConsistencyPolicy = new ConsistencyPolicy(DefaultConsistencyLevel.Session),
+                Tags =
+                {
+                    ["CreatedBy"] = "Easel",
+                    ["ProjectId"] = azureResource.ProjectId.ToString()
+                }
+            };
+
+            _logger.LogInformation("Creating Cosmos DB Account {AccountName}", recommendation.Name);
+            var operation = await cosmosCollection.CreateOrUpdateAsync(Azure.WaitUntil.Completed, recommendation.Name, cosmosData);
+            
+            _logger.LogInformation("Successfully provisioned Cosmos DB Account {AccountName}", recommendation.Name);
+            return true;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.ErrorCode == "MissingSubscriptionRegistration")
+        {
+            _logger.LogWarning("Cosmos DB namespace not registered in subscription: {Error}", ex.Message);
+            _logger.LogInformation("The subscription needs to register the Microsoft.DocumentDB namespace. Consider using Azure SQL Database or Storage Tables as alternatives");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to provision Cosmos DB Account {AccountName}", recommendation.Name);
+            return false;
+        }
+    }
+    
+    
+    private async Task<bool> DeleteCosmosDBAsync(ResourceGroupResource resourceGroup, AzureResource azureResource)
+    {
+        try
+        {
+            var cosmosAccounts = resourceGroup.GetCosmosDBAccounts();
+            var cosmosAccount = await cosmosAccounts.GetAsync(azureResource.Name);
+            
+            _logger.LogInformation("Deleting Cosmos DB Account {AccountName}", azureResource.Name);
+            await cosmosAccount.Value.DeleteAsync(Azure.WaitUntil.Completed);
+            
+            _logger.LogInformation("Successfully deleted Cosmos DB Account {AccountName}", azureResource.Name);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete Cosmos DB Account {AccountName}", azureResource.Name);
+            return false;
+        }
+    }
 }
 
 // Configuration classes for Azure resources
@@ -954,3 +1127,12 @@ public class RedisCacheConfig
     public string? Family { get; set; }
     public int? Capacity { get; set; }
 }
+
+public class CosmosDBConfig
+{
+    public string? DatabaseAccountOfferType { get; set; }
+    public string? ConsistencyLevel { get; set; }
+    public bool? EnableAutomaticFailover { get; set; }
+    public bool? EnableMultipleWriteLocations { get; set; }
+}
+

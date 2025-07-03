@@ -1,9 +1,174 @@
 import axios from "axios";
 import { isTestUser } from "./test-user";
 import { mockProjectsEnhanced, searchMockProjects } from "./mock-data-enhanced";
+import { projectResourceMapping, allMockResourcesData } from "./mock-resource-data";
 
 // In-memory storage for test user created projects
 const testUserProjects = new Map<number, Project>();
+
+// Cache for real user resources to prevent loss during navigation
+const realUserResourceCache = new Map<number, AzureResource[]>();
+
+function generateContextualMockResponse(userMessage: string): string {
+  const message = userMessage.toLowerCase();
+  
+  if (message.includes('storage') && (message.includes('sql') || message.includes('database'))) {
+    return `Great question! For most web applications, you'll typically need multiple storage solutions:
+
+**Beyond SQL Database:**
+- **Azure Storage Account** - For file uploads, images, documents
+- **Azure Redis Cache** - For session data and caching
+- **Azure CDN** - For static assets and improved performance
+
+**When to use each:**
+- SQL Database: Structured data, user accounts, transactions
+- Blob Storage: Files, images, videos, backups
+- Redis: Temporary data, sessions, real-time features
+
+For your project, I'd recommend starting with SQL Database + Storage Account, then adding Redis if you need caching.`;
+  }
+  
+  if (message.includes('cost') || message.includes('pricing') || message.includes('budget')) {
+    return `Here's a cost breakdown for typical Azure resources:
+
+**Monthly Estimates:**
+- App Service (Basic): $13-55/month
+- SQL Database (Basic): $5-15/month  
+- Storage Account: $1-10/month
+- Application Insights: Free tier available
+
+**Total for small project:** $20-80/month
+**Tips to save costs:**
+- Start with Basic tiers
+- Use auto-scaling to avoid over-provisioning
+- Monitor usage with cost alerts`;
+  }
+  
+  if (message.includes('scale') || message.includes('performance') || message.includes('users')) {
+    return `For scaling your application:
+
+**Small Scale (100s users):**
+- Basic App Service + Basic SQL Database
+- Estimated: $20-50/month
+
+**Medium Scale (1000s users):**
+- Standard App Service + Standard SQL
+- Add Redis Cache for performance
+- Estimated: $100-300/month
+
+**Large Scale (10k+ users):**
+- Premium tiers + Auto-scaling
+- CDN for global performance
+- Estimated: $500+/month
+
+What's your expected user volume?`;
+  }
+  
+  if (message.includes('security') || message.includes('auth') || message.includes('login')) {
+    return `For authentication and security:
+
+**Azure Security Services:**
+- **Azure Active Directory B2C** - User identity management
+- **Key Vault** - Secure secrets and certificates
+- **Application Gateway** - Web application firewall
+
+**Best Practices:**
+- Enable HTTPS everywhere
+- Use managed identities for service connections
+- Implement proper RBAC (Role-Based Access Control)
+- Regular security audits
+
+Would you like specific guidance on any of these security aspects?`;
+  }
+  
+  // Default helpful response
+  return `I'd be happy to help with that! For your project, here are some things to consider:
+
+**Common Questions I Can Help With:**
+- Azure resource recommendations
+- Cost optimization strategies
+- Scaling and performance planning
+- Security best practices
+- Architecture design decisions
+
+What specific aspect would you like to dive deeper into?`;
+}
+
+function generateResourcesForProject(project: Project): AzureResource[] {
+  const baseId = project.id;
+  const projectName = project.name.toLowerCase().replace(/\s+/g, '-');
+  
+  // Generate resources based on project requirements
+  const resources: AzureResource[] = [];
+  
+  // Always include core resources
+  resources.push({
+    id: baseId * 10 + 1,
+    name: `${projectName}-app`,
+    resourceType: "App Service",
+    status: "Active",
+    location: "East US",
+    estimatedMonthlyCost: 75.0,
+    configuration: { tier: "Standard", instances: 1 },
+    createdAt: project.createdAt,
+    provisionedAt: project.createdAt,
+  });
+  
+  resources.push({
+    id: baseId * 10 + 2,
+    name: `${projectName}-db`,
+    resourceType: "Azure SQL Database",
+    status: "Active", 
+    location: "East US",
+    estimatedMonthlyCost: 25.0,
+    configuration: { tier: "Basic", storage: "10GB" },
+    createdAt: project.createdAt,
+    provisionedAt: project.createdAt,
+  });
+  
+  resources.push({
+    id: baseId * 10 + 3,
+    name: `${projectName}-storage`,
+    resourceType: "Storage Account",
+    status: "Active",
+    location: "East US", 
+    estimatedMonthlyCost: 5.0,
+    configuration: { type: "Standard_LRS", tier: "Hot" },
+    createdAt: project.createdAt,
+    provisionedAt: project.createdAt,
+  });
+  
+  // Add additional resources based on requirements
+  if (project.userRequirements.toLowerCase().includes('api')) {
+    resources.push({
+      id: baseId * 10 + 4,
+      name: `${projectName}-apim`,
+      resourceType: "API Management",
+      status: "Active",
+      location: "East US",
+      estimatedMonthlyCost: 40.0,
+      configuration: { tier: "Developer" },
+      createdAt: project.createdAt,
+      provisionedAt: project.createdAt,
+    });
+  }
+  
+  if (project.userRequirements.toLowerCase().includes('cache') || project.userRequirements.toLowerCase().includes('redis')) {
+    resources.push({
+      id: baseId * 10 + 5,
+      name: `${projectName}-cache`,
+      resourceType: "Redis Cache",
+      status: "Active",
+      location: "East US",
+      estimatedMonthlyCost: 15.0,
+      configuration: { tier: "Basic", size: "C0" },
+      createdAt: project.createdAt,
+      provisionedAt: project.createdAt,
+    });
+  }
+  
+  return resources;
+}
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000/api";
@@ -62,6 +227,7 @@ export interface AzureRoleCheckResult {
 export interface CreateProjectRequest {
   name: string;
   userRequirements: string;
+  azureCredentialId?: number | null;
 }
 
 export interface UpdateProjectRequest {
@@ -239,6 +405,49 @@ class ProjectsService {
     id: number,
     request: UpdateProjectRequest
   ): Promise<void> {
+    // Handle test user project updates
+    if (isTestUser()) {
+      return new Promise((resolve, reject) => {
+        try {
+          // Get the project from memory or localStorage
+          let project = testUserProjects.get(id);
+          
+          if (!project) {
+            const storedProject = localStorage.getItem(`test_project_${id}`);
+            if (storedProject) {
+              project = JSON.parse(storedProject);
+              testUserProjects.set(id, project!);
+            }
+          }
+          
+          // Check if it's a static mock project - these can't be edited
+          const staticProject = mockProjectsEnhanced.find(p => p.id === id);
+          if (staticProject && !project) {
+            reject(new Error("Cannot edit demo projects. This is a read-only demo project."));
+            return;
+          }
+          
+          if (project) {
+            // Update the project
+            project.name = request.name || project.name;
+            project.description = request.description || project.description;
+            project.userRequirements = request.userRequirements || project.userRequirements;
+            project.updatedAt = new Date().toISOString();
+            
+            // Save back to memory and localStorage
+            testUserProjects.set(id, project);
+            localStorage.setItem(`test_project_${id}`, JSON.stringify(project));
+            
+            resolve();
+          } else {
+            reject(new Error("Project not found"));
+          }
+        } catch (error) {
+          reject(error);
+        }
+      });
+    }
+
     try {
       await axios.put(`${API_BASE_URL}/projects/${id}`, request, {
         headers: this.getAuthHeaders(),
@@ -393,8 +602,8 @@ class ProjectsService {
     if (isTestUser()) {
       return new Promise((resolve) => {
         setTimeout(() => {
-          // Generate a mock AI response
-          const mockResponse = `Thank you for your message: "${message}". This is a mock response for your project. I'd be happy to help you refine your requirements further or answer any questions about your Azure resources.`;
+          // Generate a mock AI response based on the user's question
+          const mockResponse = generateContextualMockResponse(message);
 
           // Get the project and add the conversation
           let project = testUserProjects.get(id);
@@ -679,41 +888,51 @@ class ProjectsService {
             return;
           }
 
-          // Otherwise return static mock resources for predefined projects
-          resolve([
-            {
-              id: 1,
-              name: "web-app-eastus",
-              resourceType: "App Service",
-              status: "Active" as
-                | "Provisioning"
-                | "Active"
-                | "Error"
-                | "Deleted",
-              location: "East US",
-              estimatedMonthlyCost: 73.2,
-              configuration: { tier: "Standard", instances: 1 },
-              createdAt: new Date().toISOString(),
-              provisionedAt: new Date().toISOString(),
-            },
-            {
-              id: 2,
-              name: "sql-db-eastus",
-              resourceType: "Azure SQL Database",
-              status: "Active" as
-                | "Provisioning"
-                | "Active"
-                | "Error"
-                | "Deleted",
-              location: "East US",
-              estimatedMonthlyCost: 30.0,
-              configuration: { tier: "S2", size: "100GB" },
-              createdAt: new Date().toISOString(),
-              provisionedAt: new Date().toISOString(),
-            },
-          ]);
+          // If this is a dynamic project without resources, generate some based on the project
+          if (dynamicProject && !dynamicProject.resources) {
+            console.log(`Generating resources for dynamic project ${id}: ${dynamicProject.name}`);
+            const generatedResources = generateResourcesForProject(dynamicProject);
+            
+            // Store the resources back to the project
+            dynamicProject.resources = generatedResources;
+            testUserProjects.set(id, dynamicProject);
+            localStorage.setItem(`test_project_${id}`, JSON.stringify(dynamicProject));
+            
+            resolve(generatedResources);
+            return;
+          }
+
+          // Check if this matches any static project by using the resource mapping
+          const resourceIds = projectResourceMapping[id] || [];
+          if (resourceIds.length > 0) {
+            const projectResources = resourceIds
+              .map((resourceId) => allMockResourcesData[resourceId])
+              .filter((resource) => resource !== undefined)
+              .map((resource) => ({
+                id: resource.id,
+                name: resource.name,
+                resourceType: resource.type,
+                status: resource.status as any,
+                location: resource.region,
+                estimatedMonthlyCost: resource.cost,
+                configuration: resource.configuration,
+                createdAt: resource.createdAt,
+                provisionedAt: resource.createdAt,
+              }));
+            resolve(projectResources);
+            return;
+          }
+
+          // Final fallback: return empty resources for unknown projects
+          console.warn(`Project ${id} not found, returning empty resources`);
+          resolve([]);
         }, 300);
       });
+    }
+
+    // Check cache first for real users to prevent data loss during navigation
+    if (realUserResourceCache.has(id)) {
+      return realUserResourceCache.get(id)!;
     }
 
     try {
@@ -723,6 +942,9 @@ class ProjectsService {
           headers: this.getAuthHeaders(),
         }
       );
+      
+      // Cache the result to prevent loss during navigation
+      realUserResourceCache.set(id, response.data);
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 401) {

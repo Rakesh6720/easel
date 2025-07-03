@@ -21,7 +21,7 @@ public class RequirementAnalysisService : IRequirementAnalysisService
         _logger = logger;
     }
 
-    public async Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName, int userId)
+    public async Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName, int userId, int? azureCredentialId = null)
     {
         try
         {
@@ -36,6 +36,7 @@ public class RequirementAnalysisService : IRequirementAnalysisService
                 ProcessedRequirements = processedRequirements,
                 Status = ProjectStatus.Analyzing,
                 UserId = userId,
+                UserAzureCredentialId = azureCredentialId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
@@ -60,22 +61,49 @@ public class RequirementAnalysisService : IRequirementAnalysisService
     {
         try
         {
-            var project = await _context.Projects.FindAsync(projectId);
+            var project = await _context.Projects
+                .Include(p => p.Conversations.OrderBy(c => c.CreatedAt))
+                .FirstOrDefaultAsync(p => p.Id == projectId);
+                
             if (project == null)
                 throw new ArgumentException("Project not found");
 
-            // Combine previous context with new message for Azure OpenAI
+            // Build context with conversation history
             var contextBuilder = new System.Text.StringBuilder();
+            contextBuilder.AppendLine($"PROJECT CONTEXT:");
+            contextBuilder.AppendLine($"Project Name: {project.Name}");
             contextBuilder.AppendLine($"Original Requirements: {project.UserRequirements}");
-            contextBuilder.AppendLine($"Processed Requirements: {project.ProcessedRequirements}");
-            contextBuilder.AppendLine($"New User Input: {userMessage}");
+            
+            // Include recent conversation history for context
+            if (project.Conversations.Any())
+            {
+                contextBuilder.AppendLine("\nRECENT CONVERSATION HISTORY:");
+                var recentConversations = project.Conversations.TakeLast(5).ToList();
+                foreach (var conv in recentConversations)
+                {
+                    contextBuilder.AppendLine($"User: {conv.UserMessage}");
+                    contextBuilder.AppendLine($"Assistant: {conv.AssistantResponse}");
+                    contextBuilder.AppendLine("---");
+                }
+            }
+            
+            contextBuilder.AppendLine($"\nCURRENT USER MESSAGE: {userMessage}");
+            contextBuilder.AppendLine("\nPlease respond helpfully to the current user message, taking into account the project context and conversation history.");
 
             var response = await _openAiService.AnalyzeRequirementsAsync(contextBuilder.ToString());
 
-            // Update project requirements if needed
+            // Save the conversation to database
             if (!string.IsNullOrEmpty(response))
             {
-                project.ProcessedRequirements = response;
+                var conversation = new ProjectConversation
+                {
+                    ProjectId = projectId,
+                    UserMessage = userMessage,
+                    AssistantResponse = response,
+                    CreatedAt = DateTime.UtcNow
+                };
+                
+                _context.ProjectConversations.Add(conversation);
                 project.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
@@ -155,6 +183,7 @@ public class RequirementAnalysisService : IRequirementAnalysisService
             "microsoft.sql/servers/databases" => 4.99m,
             "microsoft.insights/components" => 0.00m,
             "microsoft.cache/redis" => 15.00m,
+            "microsoft.cosmosdb/databaseaccounts" => 25.00m,
             _ => 10.00m
         };
     }

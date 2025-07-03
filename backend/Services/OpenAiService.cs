@@ -24,18 +24,24 @@ public class OpenAiService : IOpenAiService
     public async Task<string> AnalyzeRequirementsAsync(string userInput)
     {
         var systemPrompt = @"
-You are an expert Azure cloud architect. Analyze the user's application requirements and provide a structured analysis.
+You are a helpful Azure cloud architect assistant. Your goal is to provide practical, conversational, and budget-conscious advice to users building applications on Azure.
 
-Extract and identify:
-1. Application type and purpose
-2. Expected user load and scalability requirements
-3. Data storage needs
-4. Security and compliance requirements
-5. Integration requirements
-6. Performance requirements
-7. Budget considerations (if mentioned)
+IMPORTANT GUIDELINES:
+- Be conversational and helpful, not academic or verbose
+- ALWAYS address the user's specific questions and constraints directly
+- If they mention a budget, provide specific Azure service costs within that budget
+- Give actionable recommendations with real pricing
+- Ask follow-up questions to better understand their needs
+- Be concise but thorough - aim for helpful paragraphs, not essays
 
-Provide your analysis in a clear, structured format that can be used to recommend Azure resources.
+When the user provides requirements or asks questions, respond as a knowledgeable consultant who:
+1. Directly addresses their specific question or constraint
+2. Provides practical Azure resource recommendations with real costs
+3. Explains WHY certain services are recommended for their use case
+4. Asks clarifying questions to better help them
+5. Keeps responses focused and actionable
+
+If they mention budget constraints, prioritize cost-effective solutions and explain how to scale up later.
 ";
 
         try
@@ -93,53 +99,22 @@ Format as a simple list of questions.
     public async Task<List<AzureResourceRecommendation>> RecommendAzureResourcesAsync(string processedRequirements)
     {
         var systemPrompt = @"
-You are an expert Azure cloud architect. Based on the processed requirements, recommend specific Azure resources with detailed configurations.
+You must recommend Azure resources using ONLY these exact resource types:
 
-For each resource, provide:
-1. Resource type (exact Azure resource type like 'Microsoft.Web/sites', 'Microsoft.Storage/storageAccounts')
-2. Suggested name (following Azure naming conventions)
-3. Recommended location (default to 'East US' unless specified)
-4. Detailed configuration as JSON object
-5. Estimated monthly cost in USD (realistic pricing)
-6. Brief reasoning for the recommendation
+Microsoft.Web/sites
+Microsoft.Web/serverfarms
+Microsoft.Sql/servers/databases
+Microsoft.Storage/storageAccounts
+Microsoft.CosmosDB/databaseAccounts
+Microsoft.Insights/components
 
-IMPORTANT: Provide realistic configurations that match Azure's actual resource options.
-
-Resource Types to Consider:
-- Microsoft.Web/serverfarms (App Service Plans)
-- Microsoft.Web/sites (App Services/Web Apps)
-- Microsoft.Storage/storageAccounts (Storage Accounts)
-- Microsoft.Sql/servers/databases (SQL Databases)
-- Microsoft.Insights/components (Application Insights)
-- Microsoft.Cache/Redis (Redis Cache)
-
-Configuration Examples:
-App Service: { ""sku"": { ""name"": ""B1"", ""tier"": ""Basic"", ""size"": ""B1"", ""family"": ""B"", ""capacity"": 1 }, ""kind"": ""app"", ""httpsOnly"": true, ""alwaysOn"": true }
-Storage: { ""sku"": { ""name"": ""Standard_LRS"" }, ""accessTier"": ""Hot"", ""enableHttpsTrafficOnly"": true }
-SQL Database: { ""sku"": { ""name"": ""Basic"", ""tier"": ""Basic"" }, ""collation"": ""SQL_Latin1_General_CP1_CI_AS"", ""maxSizeBytes"": 2147483648 }
-
-Respond with a JSON array of resource recommendations:
-
+Example valid response:
 [
-  {
-    ""resourceType"": ""Microsoft.Web/serverfarms"",
-    ""name"": ""myapp-plan"",
-    ""location"": ""East US"",
-    ""configuration"": {
-      ""sku"": {
-        ""name"": ""B1"",
-        ""tier"": ""Basic"",
-        ""size"": ""B1"",
-        ""family"": ""B"",
-        ""capacity"": 1
-      },
-      ""kind"": ""app""
-    },
-    ""estimatedMonthlyCost"": 13.14,
-    ""reasoning"": ""Basic App Service plan for hosting web applications with moderate traffic""
-  }
+  {""resourceType"": ""Microsoft.Web/sites"", ""name"": ""my-app"", ""location"": ""East US"", ""configuration"": {""sku"": {""name"": ""B1"", ""tier"": ""Basic""}, ""kind"": ""app""}, ""estimatedMonthlyCost"": 13.14, ""reasoning"": ""Web hosting""},
+  {""resourceType"": ""Microsoft.Storage/storageAccounts"", ""name"": ""my-storage"", ""location"": ""East US"", ""configuration"": {""accountType"": ""Standard_LRS""}, ""estimatedMonthlyCost"": 5.00, ""reasoning"": ""File storage""}
 ]
-";
+
+Return only valid JSON array. No other text.";
 
         try
         {

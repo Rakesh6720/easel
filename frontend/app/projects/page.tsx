@@ -11,6 +11,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Plus,
   Search,
   Filter,
@@ -18,6 +24,8 @@ import {
   Play,
   Pause,
   Trash2,
+  Edit,
+  Copy,
   Calendar,
   DollarSign,
   Server,
@@ -25,6 +33,7 @@ import {
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { projectsService, type Project } from "@/lib/projects";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const getStatusIcon = (status: string | any) => {
   const statusStr = typeof status === "string" ? status : String(status || "");
@@ -43,6 +52,7 @@ const getStatusIcon = (status: string | any) => {
 };
 
 export default function ProjectsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +94,29 @@ export default function ProjectsPage() {
         ).includes(searchLower)
     );
   }, [projects, searchTerm]);
+
+  const handleEditProject = (projectId: number) => {
+    router.push(`/projects/${projectId}/edit`);
+  };
+
+  const handleDeleteProject = async (projectId: number) => {
+    if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
+      try {
+        await projectsService.deleteProject(projectId, true);
+        // Refresh the projects list
+        const updatedProjects = await projectsService.getProjects();
+        setProjects(updatedProjects);
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        alert('Failed to delete project. Please try again.');
+      }
+    }
+  };
+
+  const handleDuplicateProject = (projectId: number) => {
+    // Navigate to new project page with data from this project
+    router.push(`/projects/new?duplicate=${projectId}`);
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -194,13 +227,34 @@ export default function ProjectsPage() {
                       </div>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleEditProject(project.id)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Edit Project
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDuplicateProject(project.id)}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate Project
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => handleDeleteProject(project.id)}
+                        className="text-red-600 focus:text-red-600"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Project
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <CardDescription className="line-clamp-2">
                   {project.description}

@@ -6,7 +6,7 @@ namespace backend.Services;
 
 public interface IRequirementAnalysisService
 {
-    Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName, int userId);
+    Task<Project> CreateProjectFromRequirementsAsync(string userRequirements, string projectName, int userId, int? azureCredentialId = null);
     Task<string> ProcessConversationAsync(int projectId, string userMessage);
     Task<List<AzureResourceRecommendation>> GenerateResourceRecommendationsAsync(int projectId);
 }

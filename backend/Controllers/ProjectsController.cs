@@ -85,10 +85,23 @@ public class ProjectsController : ControllerBase
         try
         {
             var userId = GetCurrentUserId();
+            
+            // Validate Azure credential if provided
+            if (request.AzureCredentialId.HasValue)
+            {
+                var credential = await _unitOfWork.UserAzureCredentials.GetByIdAsync(request.AzureCredentialId.Value);
+                    
+                if (credential == null || credential.UserId != userId || !credential.IsActive)
+                {
+                    return BadRequest("Invalid or inactive Azure credential specified");
+                }
+            }
+            
             var project = await _requirementAnalysisService.CreateProjectFromRequirementsAsync(
                 request.UserRequirements, 
                 request.Name,
-                userId);
+                userId,
+                request.AzureCredentialId);
 
             return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
         }
@@ -382,6 +395,7 @@ public class CreateProjectRequest
 {
     public string Name { get; set; } = string.Empty;
     public string UserRequirements { get; set; } = string.Empty;
+    public int? AzureCredentialId { get; set; }
 }
 
 public class ConversationRequest

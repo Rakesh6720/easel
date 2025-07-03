@@ -31,6 +31,9 @@ import {
   MessageSquare,
   Activity,
   AlertTriangle,
+  Lightbulb,
+  CheckCircle,
+  Zap,
 } from "lucide-react";
 import {
   formatCurrency,
@@ -79,6 +82,10 @@ export default function ProjectDetailsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(false);
+  const [provisioning, setProvisioning] = useState(false);
+  const [selectedRecommendations, setSelectedRecommendations] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     console.log("Project details page loading, projectId:", projectId);
@@ -109,6 +116,9 @@ export default function ProjectDetailsPage() {
 
         // Load Azure credentials
         const credentialsData = await azureService.getCredentials();
+        console.log("Azure credentials data:", credentialsData);
+        console.log("Project userAzureCredentialId:", projectData.userAzureCredentialId);
+        console.log("Should show credentials component:", !projectData.userAzureCredentialId && credentialsData.length > 0);
         setAzureCredentials(credentialsData);
       } catch (err) {
         console.error("Error fetching project data:", err);
@@ -226,6 +236,77 @@ export default function ProjectDetailsPage() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleGenerateRecommendations = async () => {
+    try {
+      setLoadingRecommendations(true);
+      setError(null);
+      
+      const recommendationsData = await projectsService.generateRecommendations(projectId);
+      
+      // Add stable IDs to recommendations and auto-select all by default
+      const recommendationsWithIds = recommendationsData.map((rec: any, index: number) => ({
+        ...rec,
+        id: rec.id || `rec_${index}`
+      }));
+      setRecommendations(recommendationsWithIds);
+      
+      // Auto-select all recommendations by default
+      const allIds = new Set(recommendationsWithIds.map((rec: any) => rec.id));
+      setSelectedRecommendations(allIds);
+    } catch (err) {
+      console.error("Error generating recommendations:", err);
+      setError("Failed to generate recommendations");
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  };
+
+  const handleProvisionResources = async () => {
+    try {
+      setProvisioning(true);
+      setError(null);
+      
+      // Get selected recommendations
+      const selectedRecs = recommendations.filter(rec => 
+        selectedRecommendations.has(rec.id)
+      );
+      
+      if (selectedRecs.length === 0) {
+        setError("Please select at least one recommendation to provision");
+        return;
+      }
+      
+      await projectsService.provisionResources(projectId, selectedRecs);
+      
+      // Refresh project data to show new resources
+      const updatedProject = await projectsService.getProject(projectId);
+      const updatedResources = await projectsService.getProjectResources(projectId);
+      setProject(updatedProject);
+      setResources(updatedResources);
+      
+      // Clear recommendations after successful provisioning
+      setRecommendations([]);
+      setSelectedRecommendations(new Set());
+    } catch (err) {
+      console.error("Error provisioning resources:", err);
+      setError("Failed to provision resources");
+    } finally {
+      setProvisioning(false);
+    }
+  };
+
+  const handleToggleRecommendation = (recId: string) => {
+    setSelectedRecommendations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(recId)) {
+        newSet.delete(recId);
+      } else {
+        newSet.add(recId);
+      }
+      return newSet;
+    });
   };
 
   if (loading) {
@@ -498,6 +579,108 @@ export default function ProjectDetailsPage() {
                 <div className="text-sm text-orange-700">Assigning credential...</div>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Generate Recommendations Section */}
+      {project?.userAzureCredentialId && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="text-blue-800 flex items-center">
+              <Lightbulb className="mr-2 h-5 w-5" />
+              Resource Recommendations
+            </CardTitle>
+            <CardDescription className="text-blue-700">
+              Generate AI-powered Azure resource recommendations for your project.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recommendations.length === 0 ? (
+              <div className="text-center py-4">
+                <Button 
+                  onClick={handleGenerateRecommendations}
+                  disabled={loadingRecommendations}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Zap className="mr-2 h-4 w-4" />
+                  {loadingRecommendations ? "Generating..." : "Generate Recommendations"}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-blue-700">
+                    {recommendations.length} recommendations generated
+                  </p>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={handleGenerateRecommendations}
+                      disabled={loadingRecommendations}
+                    >
+                      Regenerate
+                    </Button>
+                    <Button 
+                      onClick={handleProvisionResources}
+                      disabled={provisioning || selectedRecommendations.size === 0}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      {provisioning ? "Provisioning..." : `Provision Selected (${selectedRecommendations.size})`}
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {recommendations.map((rec) => {
+                    const recId = rec.id;
+                    const isSelected = selectedRecommendations.has(recId);
+                    
+                    return (
+                      <div 
+                        key={recId}
+                        className={`p-4 border rounded-lg transition-all ${
+                          isSelected ? 'border-blue-300 bg-blue-100' : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleRecommendation(recId)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="text-2xl">
+                                  {getResourceTypeIcon(rec.resourceType)}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold">{rec.name}</h4>
+                                  <p className="text-sm text-muted-foreground">{rec.resourceType}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-green-600">
+                                  {formatCurrency(rec.estimatedMonthlyCost || 0)}/month
+                                </p>
+                                <p className="text-sm text-muted-foreground">{rec.location}</p>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-2">
+                              {rec.reasoning || rec.description || rec.justification}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
