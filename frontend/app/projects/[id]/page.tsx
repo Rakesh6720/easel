@@ -64,6 +64,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useParams, useRouter } from "next/navigation";
 import { AzureSubscriptionUpgrade } from "@/components/azure-subscription-upgrade";
 import { AzurePermissionError } from "@/components/azure-permission-error";
+import { Markdown } from "@/components/ui/markdown";
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -686,9 +687,12 @@ export default function ProjectDetailsPage() {
                                 <p className="text-sm text-muted-foreground">{rec.location}</p>
                               </div>
                             </div>
-                            <p className="text-sm text-muted-foreground mt-2">
-                              {rec.reasoning || rec.description || rec.justification}
-                            </p>
+                            <div className="mt-2">
+                              <Markdown 
+                                content={rec.reasoning || rec.description || rec.justification || ""} 
+                                className="text-sm"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -858,13 +862,10 @@ export default function ProjectDetailsPage() {
                 </div>
                 <div>
                   <h4 className="font-medium mb-2">AI Analysis</h4>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    {project.processedRequirements
-                      .split("\n")
-                      .map((line: string, index: number) => (
-                        <p key={index}>{line}</p>
-                      ))}
-                  </div>
+                  <Markdown 
+                    content={project.processedRequirements} 
+                    className="text-sm"
+                  />
                 </div>
               </div>
             </CardContent>

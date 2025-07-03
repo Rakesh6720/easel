@@ -6,9 +6,80 @@ export const projectRequirements: Record<number, string> = {
 };
 
 export const processedRequirements: Record<number, string> = {
-  1: "Application Type: E-commerce Web Application\nExpected Scale: Medium to high traffic\nKey Features: User auth, product catalog, cart, payments\nPerformance: Handle 1000+ concurrent users\nIntegrations: Payment providers (Stripe/PayPal)\nSecurity: PCI compliance considerations",
-  2: "Application Type: Analytics & Data Processing\nExpected Scale: High volume data ingestion\nKey Features: Real-time processing, dashboards, reporting\nPerformance: Low latency queries, streaming data\nIntegrations: Data sources, visualization tools\nSecurity: Data encryption, access controls",
-  3: "Application Type: Mobile Backend API\nExpected Scale: Mobile app with growing user base\nKey Features: REST API, push notifications, real-time chat\nPerformance: Fast response times, caching\nIntegrations: Mobile SDKs, notification services\nSecurity: JWT authentication, rate limiting",
+  1: `## E-commerce Web Application Analysis
+
+**Application Type:** E-commerce Web Platform  
+**Expected Scale:** Medium to high traffic (1000+ concurrent users)
+
+### Core Requirements
+- **User Authentication:** Secure login/registration system
+- **Product Catalog:** Searchable product listings with categories
+- **Shopping Cart:** Session-based cart with persistence
+- **Payment Processing:** Integration with payment providers
+
+### Technical Specifications
+- **Performance Target:** Handle 1000+ concurrent users
+- **Payment Integration:** Stripe/PayPal compatibility required
+- **Security:** PCI compliance considerations for payment data
+
+### Recommended Architecture
+1. **Frontend:** React/Next.js web application
+2. **Backend:** RESTful API with authentication
+3. **Database:** SQL database for transactional data
+4. **Payments:** Secure payment gateway integration`,
+
+  2: `## Analytics & Data Processing Platform
+
+**Application Type:** Real-time Analytics Dashboard  
+**Expected Scale:** High volume data ingestion and processing
+
+### Core Features
+- **Real-time Processing:** Stream analytics for live data
+- **Dashboard Visualization:** Interactive charts and reports  
+- **Data Storage:** Scalable data warehouse solution
+- **Query Performance:** Low latency for analytical queries
+
+### Performance Requirements
+- **Latency:** Sub-second query response times
+- **Throughput:** Handle high-volume streaming data
+- **Scalability:** Auto-scaling based on data load
+
+### Integration Points
+- Multiple data sources (APIs, databases, files)
+- Visualization tools and reporting systems
+- Real-time alerting and notifications
+
+### Security & Compliance
+- Data encryption in transit and at rest
+- Role-based access controls
+- Audit logging for data access`,
+
+  3: `## Mobile Backend API Services
+
+**Application Type:** Backend API for Mobile Application  
+**Expected Scale:** Growing mobile user base with real-time features
+
+### API Requirements
+- **RESTful API:** Clean, documented API endpoints
+- **Authentication:** JWT-based user authentication
+- **Push Notifications:** Cross-platform notification delivery
+- **Real-time Features:** WebSocket support for chat/updates
+
+### Performance Targets
+- **Response Time:** < 200ms average API response
+- **Availability:** 99.9% uptime requirement
+- **Scalability:** Auto-scaling based on mobile traffic
+
+### Technical Components
+1. **API Gateway:** Rate limiting and request routing
+2. **Caching Layer:** Redis for session and data caching  
+3. **Database:** NoSQL for flexible mobile data storage
+4. **Message Queue:** Async processing for notifications
+
+### Mobile Integrations
+- iOS and Android SDK compatibility
+- Push notification services (APNS, FCM)
+- Real-time communication protocols`,
 };
 
 export interface ProjectConversation {
