@@ -154,28 +154,36 @@ class BillingService {
           // Generate mock project breakdown data
           const mockProjects = [
             {
-              projectId: 8,
-              projectName: "Dating app for turtles",
-              amount: 450.25,
-              percentage: 65.2,
+              projectId: 101,
+              projectName: "Demo Web Application",
+              amount: 325.50,
+              percentage: 58.3,
               trend: "up",
-              change: "+12%",
-              resourceCount: 4,
+              change: "+8%",
+              resourceCount: 5,
               resources: [
                 {
-                  resourceId: 67,
-                  resourceName: "turtleappstorage",
+                  resourceId: 201,
+                  resourceName: "demo-webapp-storage",
                   resourceType: "Storage Account",
-                  amount: 180.50,
-                  percentage: 40.1,
+                  amount: 145.20,
+                  percentage: 44.6,
                   status: "Active"
                 },
                 {
-                  resourceId: 68,
-                  resourceName: "turtle-webapp",
+                  resourceId: 202,
+                  resourceName: "demo-app-service",
                   resourceType: "App Service",
-                  amount: 150.75,
-                  percentage: 33.5,
+                  amount: 98.30,
+                  percentage: 30.2,
+                  status: "Active"
+                },
+                {
+                  resourceId: 203,
+                  resourceName: "demo-sql-database",
+                  resourceType: "SQL Database",
+                  amount: 82.00,
+                  percentage: 25.2,
                   status: "Active"
                 }
               ],
@@ -183,20 +191,65 @@ class BillingService {
               createdAt: new Date().toISOString()
             },
             {
-              projectId: 9,
-              projectName: "E-commerce Platform",
-              amount: 240.80,
-              percentage: 34.8,
-              trend: "down",
-              change: "-5%",
+              projectId: 102,
+              projectName: "Analytics Dashboard",
+              amount: 185.75,
+              percentage: 33.3,
+              trend: "up",
+              change: "+15%",
               resourceCount: 3,
               resources: [
                 {
-                  resourceId: 70,
-                  resourceName: "ecommerce-db",
-                  resourceType: "SQL Database",
-                  amount: 120.40,
-                  percentage: 50.0,
+                  resourceId: 204,
+                  resourceName: "analytics-data-lake",
+                  resourceType: "Storage Account",
+                  amount: 95.40,
+                  percentage: 51.4,
+                  status: "Active"
+                },
+                {
+                  resourceId: 205,
+                  resourceName: "analytics-insights",
+                  resourceType: "Application Insights",
+                  amount: 55.35,
+                  percentage: 29.8,
+                  status: "Active"
+                },
+                {
+                  resourceId: 206,
+                  resourceName: "analytics-redis",
+                  resourceType: "Redis Cache",
+                  amount: 35.00,
+                  percentage: 18.8,
+                  status: "Active"
+                }
+              ],
+              status: "Active",
+              createdAt: new Date().toISOString()
+            },
+            {
+              projectId: 103,
+              projectName: "Mobile API Backend",
+              amount: 46.90,
+              percentage: 8.4,
+              trend: "down",
+              change: "-3%",
+              resourceCount: 2,
+              resources: [
+                {
+                  resourceId: 207,
+                  resourceName: "mobile-api-service",
+                  resourceType: "App Service",
+                  amount: 28.50,
+                  percentage: 60.8,
+                  status: "Active"
+                },
+                {
+                  resourceId: 208,
+                  resourceName: "mobile-api-storage",
+                  resourceType: "Storage Account",
+                  amount: 18.40,
+                  percentage: 39.2,
                   status: "Active"
                 }
               ],
