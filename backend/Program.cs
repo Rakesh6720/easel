@@ -32,6 +32,7 @@ builder.Services.AddSingleton<DefaultAzureCredential>();
 builder.Services.AddScoped<IAzureResourceService, ProductionAzureResourceService>();
 builder.Services.AddScoped<IAzureMonitoringService, AzureMonitoringService>();
 builder.Services.AddScoped<IServicePrincipalService, ServicePrincipalService>();
+builder.Services.AddScoped<IBillingService, BillingService>();
 
 // AI services
 builder.Services.AddScoped<IOpenAiService, OpenAiService>();

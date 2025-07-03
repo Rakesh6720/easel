@@ -24,68 +24,39 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
+import { billingService, type BillingData, type CostOptimizationRecommendation, type ProjectCostBreakdownItem } from "@/lib/billing";
+import { isTestUser } from "@/lib/test-user";
 import {
-  currentBill,
-  billingHistory,
-  costBreakdown,
-  paymentMethod,
-  calculateThreeMonthAverage,
-  calculateMonthOverMonthChange,
-  getBudgetUtilization,
-  getCostOptimizationSavings,
   type CurrentBill,
   type BillingPeriod,
   type CostBreakdownItem,
   type PaymentMethod,
 } from "@/lib/mock-billing-data";
-import { isTestUser } from "@/lib/test-user";
 
-interface BillingData {
-  currentBill: CurrentBill;
-  billingHistory: BillingPeriod[];
-  costBreakdown: CostBreakdownItem[];
-  paymentMethod: PaymentMethod;
-  threeMonthAvg: number;
-  monthOverMonthChange: number;
-  budgetInfo: {
-    percentage: number;
-    budget: number;
-  };
-  optimizationInfo: {
-    recommendations: number;
-    savings: number;
-  };
-}
 
 export default function BillingPage() {
   const [selectedPeriod, setSelectedPeriod] = useState("current");
   const [billingData, setBillingData] = useState<BillingData | null>(null);
+  const [projectBreakdown, setProjectBreakdown] = useState<ProjectCostBreakdownItem[]>([]);
+  const [breakdownView, setBreakdownView] = useState<"service" | "project">("service");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchBillingData = async () => {
       try {
         setLoading(true);
-
-        if (isTestUser()) {
-          // Show mock data for test user
-          setBillingData({
-            currentBill,
-            billingHistory,
-            costBreakdown,
-            paymentMethod,
-            threeMonthAvg: calculateThreeMonthAverage(),
-            monthOverMonthChange: calculateMonthOverMonthChange(),
-            budgetInfo: getBudgetUtilization(),
-            optimizationInfo: getCostOptimizationSavings(),
-          });
-        } else {
-          // Fetch real data for other users
-          // TODO: Replace with actual API calls
-          setBillingData(null);
-        }
+        const [data, projects] = await Promise.all([
+          billingService.getBillingData(),
+          billingService.getProjectCostBreakdown()
+        ]);
+        console.log("Billing data:", data);
+        console.log("Project breakdown:", projects);
+        setBillingData(data);
+        setProjectBreakdown(projects);
       } catch (error) {
         console.error("Error fetching billing data:", error);
+        setBillingData(null);
+        setProjectBreakdown([]);
       } finally {
         setLoading(false);
       }
@@ -110,12 +81,12 @@ export default function BillingPage() {
   }
 
   // Calculate dynamic values using helper functions
-  const threeMonthAvg = billingData?.threeMonthAvg || 0;
+  const threeMonthAvg = billingData?.threeMonthAverage || 0;
   const monthOverMonthChange = billingData?.monthOverMonthChange || 0;
-  const budgetInfo = billingData?.budgetInfo || { percentage: 0, budget: 0 };
-  const optimizationInfo = billingData?.optimizationInfo || {
-    recommendations: 0,
-    savings: 0,
+  const budgetInfo = billingData?.budgetInfo || { percentage: 0, budget: 0, currentSpend: 0, alertLevel: "normal" };
+  const optimizationInfo = {
+    recommendations: billingData?.optimizationRecommendations?.length || 0,
+    savings: billingData?.optimizationRecommendations?.reduce((sum, rec) => sum + rec.estimatedMonthlySavings, 0) || 0,
   };
 
   const getStatusColor = (status: string) => {
@@ -250,51 +221,152 @@ export default function BillingPage() {
         {/* Cost Breakdown */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Cost Breakdown by Service</CardTitle>
-            <CardDescription>
-              Azure resource costs for{" "}
-              {billingData?.currentBill?.period || "current period"}
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>
+                  Cost Breakdown by {breakdownView === "service" ? "Service" : "Project"}
+                </CardTitle>
+                <CardDescription>
+                  Azure resource costs for{" "}
+                  {billingData?.currentBill?.period || "current period"}
+                </CardDescription>
+              </div>
+              <div className="flex bg-muted rounded-lg p-1">
+                <button
+                  onClick={() => setBreakdownView("service")}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    breakdownView === "service"
+                      ? "bg-white shadow-sm text-azure-blue"
+                      : "text-muted-foreground hover:text-gray-700"
+                  }`}
+                >
+                  By Service
+                </button>
+                <button
+                  onClick={() => setBreakdownView("project")}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    breakdownView === "project"
+                      ? "bg-white shadow-sm text-azure-blue"
+                      : "text-muted-foreground hover:text-gray-700"
+                  }`}
+                >
+                  By Project
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {(billingData?.costBreakdown || []).map(
-                (item: any, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 azure-gradient rounded-full" />
-                      <div>
-                        <p className="font-medium">{item.service}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {item.percentage}% of total
+              {breakdownView === "service" ? (
+                // Service breakdown
+                (billingData?.costBreakdown || []).map(
+                  (item: any, index: number) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 azure-gradient rounded-full" />
+                        <div>
+                          <p className="font-medium">{item.service}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {item.percentage}% of total
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold">
+                          {formatCurrency(item.amount)}
                         </p>
+                        <div className="flex items-center text-sm">
+                          {item.trend === "up" ? (
+                            <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
+                          ) : (
+                            <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
+                          )}
+                          <span
+                            className={
+                              item.trend === "up"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {item.change}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold">
-                        {formatCurrency(item.amount)}
-                      </p>
-                      <div className="flex items-center text-sm">
-                        {item.trend === "up" ? (
-                          <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
-                        ) : (
-                          <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
-                        )}
-                        <span
-                          className={
-                            item.trend === "up"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }
-                        >
-                          {item.change}
-                        </span>
+                  )
+                )
+              ) : (
+                // Project breakdown
+                projectBreakdown.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p className="text-lg font-medium mb-2">No project data available</p>
+                    <p className="text-sm">Project cost breakdown will appear here once data is loaded.</p>
+                  </div>
+                ) : (
+                projectBreakdown.map((project, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                        <div>
+                          <p className="font-medium">{project.projectName}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {project.percentage}% of total • {project.resourceCount} resources
+                          </p>
+                        </div>
                       </div>
+                      <div className="text-right">
+                        <p className="font-semibold">
+                          {formatCurrency(project.amount)}
+                        </p>
+                        <div className="flex items-center text-sm">
+                          {project.trend === "up" ? (
+                            <TrendingUp className="mr-1 h-3 w-3 text-green-500" />
+                          ) : (
+                            <TrendingDown className="mr-1 h-3 w-3 text-red-500" />
+                          )}
+                          <span
+                            className={
+                              project.trend === "up"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {project.change}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Project resources */}
+                    <div className="ml-5 space-y-2">
+                      {project.resources.slice(0, 3).map((resource, resourceIndex) => (
+                        <div
+                          key={resourceIndex}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className="w-1 h-1 bg-gray-400 rounded-full" />
+                            <span className="text-muted-foreground">
+                              {resource.resourceName} ({resource.resourceType})
+                            </span>
+                          </div>
+                          <span className="font-medium">
+                            {formatCurrency(resource.amount)}
+                          </span>
+                        </div>
+                      ))}
+                      {project.resources.length > 3 && (
+                        <div className="text-sm text-muted-foreground ml-3">
+                          +{project.resources.length - 3} more resources
+                        </div>
+                      )}
                     </div>
                   </div>
+                ))
                 )
               )}
             </div>
