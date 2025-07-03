@@ -20,7 +20,7 @@ export interface AzureCredential {
 }
 
 export interface AddAzureCredentialsRequest {
-  subscriptionId: string;
+  subscriptionId?: string;
   tenantId: string;
   clientId: string;
   clientSecret: string;
@@ -197,7 +197,7 @@ class AzureService {
     if (endTime) params.append("endTime", endTime);
 
     const response = await axios.get(
-      `${API_BASE_URL}/azure/resources/${resourceId}/metrics?${params}`,
+      `${API_BASE_URL}/azure/resources/${resourceId}/azure-metrics?${params}`,
       {
         headers: this.getAuthHeaders(),
       }

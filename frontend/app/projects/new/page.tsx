@@ -179,10 +179,22 @@ For example: web application, API gateway, microservices, data processing platfo
       const response = await projectsService.addConversation(parseInt(currentProjectId), userMessage);
       
       // Add AI response to conversation
+      const aiMessage = response.aiResponse || response.message || "I'll help you refine your requirements.";
       setConversation(prev => [...prev, { 
         role: 'assistant' as const, 
-        message: response.aiResponse || response.message || "I'll help you refine your requirements."
+        message: aiMessage
       }]);
+      
+      // Add a follow-up prompt after a brief delay to encourage continued conversation
+      setTimeout(() => {
+        const followUpPrompt = generateFollowUpPrompt(userMessage, aiMessage);
+        if (followUpPrompt) {
+          setConversation(prev => [...prev, { 
+            role: 'assistant' as const, 
+            message: followUpPrompt
+          }]);
+        }
+      }, 2000);
     } catch (error) {
       console.error('Error getting AI response:', error);
       
@@ -195,6 +207,48 @@ For example: web application, API gateway, microservices, data processing platfo
       }]);
     }
   }
+
+  const generateFollowUpPrompt = (userMessage: string, aiResponse: string) => {
+    const message = userMessage.toLowerCase();
+    const response = aiResponse.toLowerCase();
+    
+    // Don't generate follow-up if the response already contains a question
+    if (aiResponse.includes('?')) {
+      return null;
+    }
+    
+    // Generate contextual follow-up questions based on the conversation
+    if (message.includes('web application') || message.includes('website')) {
+      return "Great! For a web application, I'd like to understand a bit more:\n\n• What's your expected user volume (hundreds, thousands, or more)?\n• Do you need user authentication and profiles?\n• Will you be handling payments or sensitive data?";
+    }
+    
+    if (message.includes('api') || message.includes('microservice')) {
+      return "Perfect! For API/microservices architecture:\n\n• How many different services do you envision?\n• What's your expected request volume?\n• Do you need real-time features or webhooks?";
+    }
+    
+    if (message.includes('database') || message.includes('data')) {
+      return "Good to know about your data needs! Some follow-up questions:\n\n• What type of data will you store (user profiles, transactions, content)?\n• Do you need real-time analytics or reporting?\n• Any compliance requirements (GDPR, HIPAA, etc.)?";
+    }
+    
+    if (message.includes('budget') || message.includes('cost')) {
+      return "Budget is important! Let me help optimize for your budget:\n\n• What's your monthly budget range?\n• Is this for development/testing or production?\n• Any preference for pay-as-you-go vs. reserved pricing?";
+    }
+    
+    if (message.includes('scale') || message.includes('user')) {
+      return "Understanding scale helps with the right recommendations:\n\n• How many users do you expect in the first 6 months?\n• Any seasonal traffic patterns?\n• Global users or specific regions?";
+    }
+    
+    // Default follow-ups based on conversation length
+    const conversationLength = conversation.length;
+    
+    if (conversationLength <= 2) {
+      return "What other aspects of your project would you like to discuss? I can help with:\n\n• Architecture decisions\n• Scaling considerations\n• Security requirements\n• Budget optimization";
+    } else if (conversationLength <= 4) {
+      return "Any other technical requirements or constraints I should know about?";
+    }
+    
+    return null; // Stop follow-ups after sufficient conversation
+  };
 
   const generateSmartFallbackResponse = (userMessage: string, projectData: ProjectData) => {
     const message = userMessage.toLowerCase();
@@ -590,7 +644,9 @@ What aspect would you like to explore first - the core infrastructure, specific 
 
               <div className="flex space-x-2">
                 <Input
-                  placeholder="Ask a question or provide more details..."
+                  placeholder={conversation.length === 0 
+                    ? "Ask a question or provide more details..." 
+                    : "Continue the conversation..."}
                   value={currentMessage}
                   onChange={(e) => setCurrentMessage(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -599,6 +655,12 @@ What aspect would you like to explore first - the core infrastructure, specific 
                   Send
                 </Button>
               </div>
+
+              {conversation.length > 0 && (
+                <div className="text-center text-sm text-muted-foreground">
+                  💬 Keep asking questions to refine your requirements, or generate recommendations when ready
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button 
@@ -611,6 +673,7 @@ What aspect would you like to explore first - the core infrastructure, specific 
                 <Button 
                   variant="azure"
                   onClick={handleGenerateRecommendations}
+                  className={conversation.length > 0 ? "" : "opacity-50"}
                 >
                   Generate Recommendations
                   <ArrowRight className="ml-2 h-4 w-4" />

@@ -35,6 +35,9 @@ public class ProductionAzureResourceService : IAzureResourceService
 
     private ArmClient CreateArmClient(UserAzureCredential credentials)
     {
+        _logger.LogInformation("Creating ArmClient with ClientId: {ClientId}, TenantId: {TenantId}, SubscriptionId: {SubscriptionId}", 
+            credentials.ClientId, credentials.TenantId, credentials.SubscriptionId);
+            
         var clientSecretCredential = new ClientSecretCredential(
             credentials.TenantId,
             credentials.ClientId,
@@ -43,11 +46,156 @@ public class ProductionAzureResourceService : IAzureResourceService
         return new ArmClient(clientSecretCredential);
     }
 
+    public async Task<bool> RetryResourceAsync(int resourceId)
+    {
+        try
+        {
+            _logger.LogInformation("Retrying resource {ResourceId}", resourceId);
+            
+            // Find the existing failed resource
+            var existingResource = await _context.AzureResources
+                .Include(r => r.Project)
+                .ThenInclude(p => p.UserAzureCredential)
+                .FirstOrDefaultAsync(r => r.Id == resourceId);
+                
+            if (existingResource == null)
+            {
+                _logger.LogError("Resource {ResourceId} not found", resourceId);
+                return false;
+            }
+            
+            if (existingResource.Status != ResourceStatus.Failed)
+            {
+                _logger.LogWarning("Resource {ResourceId} is not in failed state (current: {Status})", resourceId, existingResource.Status);
+                return false;
+            }
+            
+            // Update status to provisioning
+            existingResource.Status = ResourceStatus.Provisioning;
+            existingResource.ErrorMessage = null;
+            existingResource.LastRetryAt = DateTime.UtcNow;
+            _context.AzureResources.Update(existingResource);
+            await _context.SaveChangesAsync();
+            
+            // Create recommendation from existing resource
+            var configuration = !string.IsNullOrEmpty(existingResource.Configuration) 
+                ? JsonSerializer.Deserialize<Dictionary<string, object>>(existingResource.Configuration) ?? new Dictionary<string, object>()
+                : new Dictionary<string, object>();
+                
+            var recommendation = new AzureResourceRecommendation
+            {
+                ResourceType = existingResource.ResourceType,
+                Name = existingResource.Name,
+                Location = existingResource.Location,
+                EstimatedMonthlyCost = existingResource.EstimatedMonthlyCost,
+                Configuration = configuration,
+                Reasoning = "Retry of failed resource"
+            };
+            
+            // Get Azure client
+            var armClient = CreateArmClient(existingResource.Project.UserAzureCredential);
+            var subscription = armClient.GetSubscriptionResource(
+                new Azure.Core.ResourceIdentifier($"/subscriptions/{existingResource.Project.UserAzureCredential.SubscriptionId}"));
+            
+            // Get or create resource group
+            var resourceGroupCollection = subscription.GetResourceGroups();
+            var resourceGroupResource = await resourceGroupCollection.GetAsync(existingResource.ResourceGroupName);
+            
+            // Attempt to provision the specific resource
+            bool success = await ProvisionSpecificResourceAsync(resourceGroupResource.Value, existingResource, recommendation);
+            
+            // Update the resource status based on result
+            if (success)
+            {
+                existingResource.Status = ResourceStatus.Active;
+                existingResource.ProvisionedAt = DateTime.UtcNow;
+                existingResource.ErrorMessage = null;
+                _logger.LogInformation("Successfully retried resource {ResourceId}", resourceId);
+            }
+            else
+            {
+                existingResource.Status = ResourceStatus.Failed;
+                existingResource.ErrorMessage = "Retry failed - check logs for details";
+                _logger.LogError("Failed to retry resource {ResourceId}", resourceId);
+            }
+            
+            _context.AzureResources.Update(existingResource);
+            await _context.SaveChangesAsync();
+            
+            return success;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrying resource {ResourceId}", resourceId);
+            
+            // Update resource to failed state
+            var resource = await _context.AzureResources.FindAsync(resourceId);
+            if (resource != null)
+            {
+                resource.Status = ResourceStatus.Failed;
+                resource.ErrorMessage = $"Retry error: {ex.Message}";
+                _context.AzureResources.Update(resource);
+                await _context.SaveChangesAsync();
+            }
+            
+            return false;
+        }
+    }
+
     public async Task<bool> ValidateAzureCredentialsAsync(UserAzureCredential credentials)
     {
         try
         {
             var armClient = CreateArmClient(credentials);
+            
+            // If subscription ID is not provided or empty, try to discover accessible subscriptions
+            if (string.IsNullOrEmpty(credentials.SubscriptionId))
+            {
+                _logger.LogInformation("No subscription ID provided, attempting to discover accessible subscriptions for service principal");
+                
+                var subscriptions = armClient.GetSubscriptions();
+                var accessibleSubscriptions = new List<Azure.ResourceManager.Resources.SubscriptionResource>();
+                
+                await foreach (var sub in subscriptions)
+                {
+                    try
+                    {
+                        // Try to access subscription details to verify permissions
+                        await sub.GetAsync();
+                        accessibleSubscriptions.Add(sub);
+                        _logger.LogInformation("Service principal has access to subscription: {SubscriptionId} - {DisplayName}", 
+                            sub.Data.SubscriptionId, sub.Data.DisplayName);
+                    }
+                    catch (Azure.RequestFailedException ex) when (ex.Status == 403)
+                    {
+                        // Service principal doesn't have access to this subscription, skip it
+                        _logger.LogDebug("Service principal lacks access to subscription: {SubscriptionId}", sub.Data.SubscriptionId);
+                        continue;
+                    }
+                }
+                
+                if (accessibleSubscriptions.Count == 0)
+                {
+                    _logger.LogWarning("Service principal authentication succeeded but has no accessible subscriptions");
+                    credentials.IsActive = false;
+                    credentials.ErrorMessage = "Service principal has no accessible subscriptions. Please assign at least 'Reader' role to the Service Principal on a subscription.";
+                    credentials.LastValidated = DateTime.UtcNow;
+                    credentials.SubscriptionName = "No Accessible Subscriptions";
+                    return true; // Allow saving but mark as inactive
+                }
+                
+                // Use the first accessible subscription
+                var firstSub = accessibleSubscriptions.First();
+                credentials.SubscriptionId = firstSub.Data.SubscriptionId;
+                credentials.SubscriptionName = firstSub.Data.DisplayName ?? "Unknown";
+                credentials.LastValidated = DateTime.UtcNow;
+                credentials.IsActive = true;
+                
+                _logger.LogInformation("Auto-assigned subscription {SubscriptionId} for service principal", credentials.SubscriptionId);
+                return true;
+            }
+            
+            // Subscription ID is provided, validate access to specific subscription
             var subscription = armClient.GetSubscriptionResource(
                 new Azure.Core.ResourceIdentifier($"/subscriptions/{credentials.SubscriptionId}"));
 
@@ -60,12 +208,48 @@ public class ProductionAzureResourceService : IAzureResourceService
 
             return true;
         }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 403 && ex.ErrorCode == "AuthorizationFailed")
+        {
+            _logger.LogWarning("Azure Service Principal lacks required permissions for subscription {SubscriptionId}. " +
+                "The Service Principal needs at least 'Reader' role on the subscription. " +
+                "Credentials will be saved but marked as inactive until permissions are granted. " +
+                "Error: {Error}", credentials.SubscriptionId, ex.Message);
+            
+            // For permission errors, save the credentials but mark as inactive
+            // This allows users to add credentials and then assign permissions
+            credentials.IsActive = false;
+            credentials.ErrorMessage = "Service Principal lacks required permissions. Please assign at least 'Reader' role to the Service Principal on this subscription.";
+            credentials.LastValidated = DateTime.UtcNow;
+            credentials.SubscriptionName = "Unknown (Permissions Required)";
+            
+            // Return true to allow credentials to be saved, but they'll be inactive
+            return true;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 401)
+        {
+            _logger.LogError("Azure credentials authentication failed. " +
+                "Invalid client ID, client secret, or tenant ID. Error: {Error}", ex.Message);
+            
+            credentials.IsActive = false;
+            credentials.ErrorMessage = "Authentication failed. Please verify your Client ID, Client Secret, and Tenant ID are correct.";
+            return false;
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+        {
+            _logger.LogError("Subscription {SubscriptionId} not found or not accessible. Error: {Error}", 
+                credentials.SubscriptionId, ex.Message);
+            
+            credentials.IsActive = false;
+            credentials.ErrorMessage = "Subscription not found or not accessible. Please verify your Subscription ID is correct.";
+            return false;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to validate Azure credentials for subscription {SubscriptionId}", 
                 credentials.SubscriptionId);
             
             credentials.IsActive = false;
+            credentials.ErrorMessage = $"Validation failed: {ex.Message}";
             return false;
         }
     }
@@ -245,55 +429,96 @@ public class ProductionAzureResourceService : IAzureResourceService
 
             var resourceGroup = resourceGroupLro.Value;
 
+            // Create all database records first
+            var azureResources = new List<AzureResource>();
             foreach (var recommendation in recommendations)
             {
+                var azureResource = new AzureResource
+                {
+                    ProjectId = projectId,
+                    ResourceType = recommendation.ResourceType,
+                    Name = recommendation.Name,
+                    ResourceGroupName = resourceGroupName,
+                    Location = recommendation.Location,
+                    Configuration = JsonSerializer.Serialize(recommendation.Configuration),
+                    EstimatedMonthlyCost = recommendation.EstimatedMonthlyCost,
+                    Status = ResourceStatus.Provisioning
+                };
+
+                _context.AzureResources.Add(azureResource);
+                azureResources.Add(azureResource);
+            }
+            await _context.SaveChangesAsync();
+
+            // Provision all resources in parallel
+            _logger.LogInformation("Starting parallel provisioning of {Count} resources", recommendations.Count);
+            
+            var provisioningTasks = azureResources.Select(async azureResource =>
+            {
+                var recommendation = recommendations.First(r => r.Name == azureResource.Name);
+                
                 try
                 {
-                    var azureResource = new AzureResource
+                    _logger.LogInformation("Starting provisioning of {ResourceType} {ResourceName}", 
+                        recommendation.ResourceType, recommendation.Name);
+                    
+                    // Add timeout for individual resource provisioning
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3)); // 3 minute timeout per resource
+                    var timeoutTask = Task.Delay(Timeout.Infinite, cts.Token);
+                    var provisionTask = ProvisionSpecificResourceAsync(resourceGroup, azureResource, recommendation);
+                    
+                    var completedTask = await Task.WhenAny(provisionTask, timeoutTask);
+                    
+                    bool success;
+                    if (completedTask == timeoutTask)
                     {
-                        ProjectId = projectId,
-                        ResourceType = recommendation.ResourceType,
-                        Name = recommendation.Name,
-                        ResourceGroupName = resourceGroupName,
-                        Location = recommendation.Location,
-                        Configuration = JsonSerializer.Serialize(recommendation.Configuration),
-                        EstimatedMonthlyCost = recommendation.EstimatedMonthlyCost,
-                        Status = ResourceStatus.Provisioning
-                    };
-
-                    _context.AzureResources.Add(azureResource);
-                    await _context.SaveChangesAsync();
-
-                    // Provision the actual resource in user's subscription
-                    var success = await ProvisionSpecificResourceAsync(resourceGroup, azureResource, recommendation);
+                        _logger.LogWarning("⏱️ Provisioning timed out for {ResourceName} after 3 minutes", recommendation.Name);
+                        success = false;
+                    }
+                    else
+                    {
+                        success = await provisionTask;
+                    }
                     
                     if (success)
                     {
                         azureResource.Status = ResourceStatus.Active;
                         azureResource.ProvisionedAt = DateTime.UtcNow;
                         azureResource.AzureResourceId = $"/subscriptions/{project.UserAzureCredential.SubscriptionId}/resourceGroups/{resourceGroupName}/providers/{recommendation.ResourceType}/{recommendation.Name}";
+                        _logger.LogInformation("✅ Successfully provisioned {ResourceName}", recommendation.Name);
                     }
                     else
                     {
                         azureResource.Status = ResourceStatus.Failed;
+                        azureResource.ErrorMessage = "Provisioning failed - see logs for details";
+                        _logger.LogWarning("❌ Failed to provision {ResourceName}", recommendation.Name);
                     }
-                    
-                    await _context.SaveChangesAsync();
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Failed to provision resource {ResourceName} in user subscription", recommendation.Name);
-                    
-                    var failedResource = _context.AzureResources.FirstOrDefault(r => 
-                        r.ProjectId == projectId && r.Name == recommendation.Name);
-                    
-                    if (failedResource != null)
-                    {
-                        failedResource.Status = ResourceStatus.Failed;
-                        await _context.SaveChangesAsync();
-                    }
+                    azureResource.Status = ResourceStatus.Failed;
+                    azureResource.ErrorMessage = $"Error: {ex.Message}";
+                    _logger.LogError(ex, "❌ Error provisioning {ResourceName}", recommendation.Name);
                 }
+                
+                return azureResource;
+            }).ToList();
+
+            // Wait for all provisioning tasks to complete (with overall timeout)
+            var allTasksCompleted = await Task.WhenAll(provisioningTasks);
+            
+            // Update all resource statuses in database
+            foreach (var resource in allTasksCompleted)
+            {
+                _context.AzureResources.Update(resource);
             }
+            await _context.SaveChangesAsync();
+            
+            var successCount = allTasksCompleted.Count(r => r.Status == ResourceStatus.Active);
+            var failedCount = allTasksCompleted.Count(r => r.Status == ResourceStatus.Failed);
+            
+            _logger.LogInformation("Parallel provisioning completed: {SuccessCount} succeeded, {FailedCount} failed", 
+                successCount, failedCount);
 
             // Check if all resources were provisioned successfully
             var allResources = _context.AzureResources.Where(r => r.ProjectId == projectId).ToList();

@@ -54,6 +54,7 @@ import {
   getCurrentMetrics,
 } from "@/lib/mock-resource-data";
 import { projectsService, type AzureResource } from "@/lib/projects";
+import { azureService } from "@/lib/azure";
 import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -71,6 +72,7 @@ export default function ResourceDetailPage() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>({});
+  const [azureMetrics, setAzureMetrics] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -136,22 +138,57 @@ export default function ResourceDetailPage() {
             cost: foundResource.estimatedMonthlyCost || 0,
             lastUpdated: foundResource.provisionedAt || foundResource.createdAt,
             createdAt: foundResource.createdAt,
-            resourceGroup: "default-rg", // Not available from API
-            subscription: "default-subscription", // Not available from API
-            azureResourceId: "", // Not available from API
+            resourceGroup: foundResource.resourceGroupName || "Unknown",
+            subscription: foundResource.azureResourceId ? foundResource.azureResourceId.split('/')[2] : "Unknown",
+            azureResourceId: foundResource.azureResourceId || "",
             configuration: foundResource.configuration || {},
           };
 
           setResource(formattedResource);
-          // For real data, we don't have alerts, logs, or metrics yet
+          
+          // For real users, try to fetch actual Azure metrics
+          try {
+            const realMetrics = await azureService.getResourceMetrics(resourceIdNum);
+            setAzureMetrics(realMetrics);
+            
+            // Convert Azure metrics to the format expected by the UI
+            const formattedMetrics = {
+              cpu: { 
+                current: realMetrics.CpuPercentage?.[0]?.Average || 0, 
+                average: realMetrics.CpuPercentage?.reduce((sum: number, dp: any) => sum + (dp.Average || 0), 0) / (realMetrics.CpuPercentage?.length || 1) || 0,
+                max: Math.max(...(realMetrics.CpuPercentage?.map((dp: any) => dp.Maximum || 0) || [0]))
+              },
+              memory: { 
+                current: realMetrics.MemoryPercentage?.[0]?.Average || 0,
+                average: realMetrics.MemoryPercentage?.reduce((sum: number, dp: any) => sum + (dp.Average || 0), 0) / (realMetrics.MemoryPercentage?.length || 1) || 0,
+                max: Math.max(...(realMetrics.MemoryPercentage?.map((dp: any) => dp.Maximum || 0) || [0]))
+              },
+              requests: { 
+                current: realMetrics.Requests?.[0]?.Total || 0, 
+                total: realMetrics.Requests?.reduce((sum: number, dp: any) => sum + (dp.Total || 0), 0) || 0,
+                errorsToday: realMetrics.Http4xx?.reduce((sum: number, dp: any) => sum + (dp.Total || 0), 0) || 0
+              },
+              responseTime: { 
+                current: realMetrics.AverageResponseTime?.[0]?.Average || 0,
+                average: realMetrics.AverageResponseTime?.reduce((sum: number, dp: any) => sum + (dp.Average || 0), 0) / (realMetrics.AverageResponseTime?.length || 1) || 0,
+                p95: Math.max(...(realMetrics.AverageResponseTime?.map((dp: any) => dp.Maximum || 0) || [0]))
+              },
+            };
+            setMetrics(formattedMetrics);
+          } catch (metricsError) {
+            console.warn("Could not fetch Azure metrics, using placeholder data:", metricsError);
+            // Fallback to placeholder metrics
+            setMetrics({
+              cpu: { current: 0, average: 0, max: 0 },
+              memory: { current: 0, average: 0, max: 0 },
+              requests: { current: 0, total: 0, errorsToday: 0 },
+              responseTime: { current: 0, average: 0, p95: 0 },
+            });
+          }
+          
+          // For real data, we don't have alerts or logs yet
           setAlerts([]);
           setLogs([]);
-          setMetrics({
-            cpu: { current: 0, average: 0, max: 0 },
-            memory: { current: 0, average: 0, max: 0 },
-            requests: { current: 0, total: 0, errorsToday: 0 },
-            responseTime: { current: 0, average: 0, p95: 0 },
-          });
         }
       } catch (err) {
         console.error("Error fetching resource data:", err);
@@ -435,7 +472,7 @@ export default function ResourceDetailPage() {
                       Response Time
                     </p>
                     <p className="text-2xl font-bold">
-                      {metrics?.responseTime?.current || 0}ms
+                      {Math.round(metrics?.responseTime?.current || 0)}ms
                     </p>
                   </div>
                   <Clock className="h-8 w-8 text-muted-foreground" />
@@ -646,7 +683,7 @@ export default function ResourceDetailPage() {
 
       {activeTab === "metrics" && (
         <div className="space-y-6">
-          {/* Performance Metrics Overview */}
+          {/* Performance Metrics Overview - Real data for authenticated users, mock data for test users */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardContent className="p-6">
@@ -656,12 +693,12 @@ export default function ResourceDetailPage() {
                       Avg CPU Usage
                     </p>
                     <p className="text-2xl font-bold">
-                      {Math.round(
+                      {isTestUser() ? Math.round(
                         getCpuMetricData().reduce(
                           (sum, d) => sum + (d.average || 0),
                           0
                         ) / getCpuMetricData().length
-                      )}
+                      ) : Math.round(metrics?.cpu?.average || 0)}
                       %
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -681,12 +718,12 @@ export default function ResourceDetailPage() {
                       Avg Memory Usage
                     </p>
                     <p className="text-2xl font-bold">
-                      {Math.round(
+                      {isTestUser() ? Math.round(
                         getMemoryMetricData().reduce(
                           (sum, d) => sum + (d.average || 0),
                           0
                         ) / getMemoryMetricData().length
-                      )}
+                      ) : Math.round(metrics?.memory?.average || 0)}
                       %
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -706,9 +743,9 @@ export default function ResourceDetailPage() {
                       Total Requests
                     </p>
                     <p className="text-2xl font-bold">
-                      {getRequestsMetricData()
+                      {isTestUser() ? getRequestsMetricData()
                         .reduce((sum, d) => sum + (d.total || 0), 0)
-                        .toLocaleString()}
+                        .toLocaleString() : (metrics?.requests?.total || 0).toLocaleString()}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Last 24 hours
@@ -727,12 +764,12 @@ export default function ResourceDetailPage() {
                       Avg Response Time
                     </p>
                     <p className="text-2xl font-bold">
-                      {formatResponseTime(
+                      {isTestUser() ? formatResponseTime(
                         getResponseTimeMetricData().reduce(
                           (sum, d) => sum + (d.average || 0),
                           0
                         ) / getResponseTimeMetricData().length
-                      )}
+                      ) : `${Math.round(metrics?.responseTime?.average || 0)}ms`}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Last 24 hours
@@ -755,10 +792,13 @@ export default function ResourceDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="h-64 flex items-end justify-between bg-muted/20 p-4 rounded">
-                    {getCpuMetricData()
-                      .slice(-12)
-                      .map((dataPoint, index) => {
-                        const height = ((dataPoint.average || 0) / 100) * 200;
+                    {(() => {
+                      const cpuData = isTestUser() 
+                        ? getCpuMetricData() 
+                        : (azureMetrics?.CpuPercentage || azureMetrics?.["cpu_percent"] || []);
+                      return cpuData.slice(-12).map((dataPoint, index) => {
+                        const value = isTestUser() ? dataPoint.average : (dataPoint.Average || 0);
+                        const height = ((value || 0) / 100) * 200;
                         return (
                           <div
                             key={index}
@@ -769,25 +809,36 @@ export default function ResourceDetailPage() {
                               style={{ height: `${height}px` }}
                             />
                             <span className="text-xs text-muted-foreground mt-2">
-                              {new Date(dataPoint.timeStamp).getHours()}:00
+                              {isTestUser() 
+                                ? new Date(dataPoint.timeStamp).getHours() + ":00"
+                                : new Date(dataPoint.TimeStamp).getHours() + ":00"}
                             </span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>
                       Peak:{" "}
-                      {Math.max(
-                        ...getCpuMetricData().map((d) => d.average || 0)
-                      ).toFixed(1)}
+                      {(() => {
+                        const cpuData = isTestUser() 
+                          ? getCpuMetricData() 
+                          : (azureMetrics?.CpuPercentage || azureMetrics?.["cpu_percent"] || []);
+                        const values = cpuData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        return Math.max(...values, 0).toFixed(1);
+                      })()}
                       %
                     </span>
                     <span>
                       Low:{" "}
-                      {Math.min(
-                        ...getCpuMetricData().map((d) => d.average || 0)
-                      ).toFixed(1)}
+                      {(() => {
+                        const cpuData = isTestUser() 
+                          ? getCpuMetricData() 
+                          : (azureMetrics?.CpuPercentage || azureMetrics?.["cpu_percent"] || []);
+                        const values = cpuData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        return Math.min(...values, 0).toFixed(1);
+                      })()}
                       %
                     </span>
                   </div>
@@ -804,10 +855,13 @@ export default function ResourceDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="h-64 flex items-end justify-between bg-muted/20 p-4 rounded">
-                    {getMemoryMetricData()
-                      .slice(-12)
-                      .map((dataPoint, index) => {
-                        const height = ((dataPoint.average || 0) / 100) * 200;
+                    {(() => {
+                      const memoryData = isTestUser() 
+                        ? getMemoryMetricData() 
+                        : (azureMetrics?.MemoryPercentage || azureMetrics?.["physical_data_read_percent"] || []);
+                      return memoryData.slice(-12).map((dataPoint, index) => {
+                        const value = isTestUser() ? dataPoint.average : (dataPoint.Average || 0);
+                        const height = ((value || 0) / 100) * 200;
                         return (
                           <div
                             key={index}
@@ -818,25 +872,36 @@ export default function ResourceDetailPage() {
                               style={{ height: `${height}px` }}
                             />
                             <span className="text-xs text-muted-foreground mt-2">
-                              {new Date(dataPoint.timeStamp).getHours()}:00
+                              {isTestUser() 
+                                ? new Date(dataPoint.timeStamp).getHours() + ":00"
+                                : new Date(dataPoint.TimeStamp).getHours() + ":00"}
                             </span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>
                       Peak:{" "}
-                      {Math.max(
-                        ...getMemoryMetricData().map((d) => d.average || 0)
-                      ).toFixed(1)}
+                      {(() => {
+                        const memoryData = isTestUser() 
+                          ? getMemoryMetricData() 
+                          : (azureMetrics?.MemoryPercentage || azureMetrics?.["physical_data_read_percent"] || []);
+                        const values = memoryData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        return Math.max(...values, 0).toFixed(1);
+                      })()}
                       %
                     </span>
                     <span>
                       Low:{" "}
-                      {Math.min(
-                        ...getMemoryMetricData().map((d) => d.average || 0)
-                      ).toFixed(1)}
+                      {(() => {
+                        const memoryData = isTestUser() 
+                          ? getMemoryMetricData() 
+                          : (azureMetrics?.MemoryPercentage || azureMetrics?.["physical_data_read_percent"] || []);
+                        const values = memoryData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        return Math.min(...values, 0).toFixed(1);
+                      })()}
                       %
                     </span>
                   </div>
@@ -855,14 +920,15 @@ export default function ResourceDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="h-64 flex items-end justify-between bg-muted/20 p-4 rounded">
-                    {getRequestsMetricData()
-                      .slice(-12)
-                      .map((dataPoint, index) => {
-                        const maxRequests = Math.max(
-                          ...getRequestsMetricData().map((d) => d.total || 0)
-                        );
-                        const height =
-                          ((dataPoint.total || 0) / maxRequests) * 200;
+                    {(() => {
+                      const requestsData = isTestUser() 
+                        ? getRequestsMetricData() 
+                        : (azureMetrics?.Requests || azureMetrics?.Transactions || []);
+                      const allValues = requestsData.map(d => isTestUser() ? (d.total || 0) : (d.Total || 0));
+                      const maxRequests = Math.max(...allValues, 1);
+                      return requestsData.slice(-12).map((dataPoint, index) => {
+                        const value = isTestUser() ? dataPoint.total : (dataPoint.Total || 0);
+                        const height = ((value || 0) / maxRequests) * 200;
                         return (
                           <div
                             key={index}
@@ -873,24 +939,35 @@ export default function ResourceDetailPage() {
                               style={{ height: `${height}px` }}
                             />
                             <span className="text-xs text-muted-foreground mt-2">
-                              {new Date(dataPoint.timeStamp).getHours()}:00
+                              {isTestUser() 
+                                ? new Date(dataPoint.timeStamp).getHours() + ":00"
+                                : new Date(dataPoint.TimeStamp).getHours() + ":00"}
                             </span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>
                       Peak:{" "}
-                      {Math.max(
-                        ...getRequestsMetricData().map((d) => d.total || 0)
-                      ).toLocaleString()}
+                      {(() => {
+                        const requestsData = isTestUser() 
+                          ? getRequestsMetricData() 
+                          : (azureMetrics?.Requests || azureMetrics?.Transactions || []);
+                        const values = requestsData.map(d => isTestUser() ? (d.total || 0) : (d.Total || 0));
+                        return Math.max(...values, 0).toLocaleString();
+                      })()}
                     </span>
                     <span>
                       Low:{" "}
-                      {Math.min(
-                        ...getRequestsMetricData().map((d) => d.total || 0)
-                      ).toLocaleString()}
+                      {(() => {
+                        const requestsData = isTestUser() 
+                          ? getRequestsMetricData() 
+                          : (azureMetrics?.Requests || azureMetrics?.Transactions || []);
+                        const values = requestsData.map(d => isTestUser() ? (d.total || 0) : (d.Total || 0));
+                        return Math.min(...values, 0).toLocaleString();
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -908,16 +985,15 @@ export default function ResourceDetailPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="h-64 flex items-end justify-between bg-muted/20 p-4 rounded">
-                    {getResponseTimeMetricData()
-                      .slice(-12)
-                      .map((dataPoint, index) => {
-                        const maxResponseTime = Math.max(
-                          ...getResponseTimeMetricData().map(
-                            (d) => d.average || 0
-                          )
-                        );
-                        const height =
-                          ((dataPoint.average || 0) / maxResponseTime) * 200;
+                    {(() => {
+                      const responseTimeData = isTestUser() 
+                        ? getResponseTimeMetricData() 
+                        : (azureMetrics?.AverageResponseTime || azureMetrics?.SuccessServerLatency || []);
+                      const allValues = responseTimeData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                      const maxResponseTime = Math.max(...allValues, 1);
+                      return responseTimeData.slice(-12).map((dataPoint, index) => {
+                        const value = isTestUser() ? dataPoint.average : (dataPoint.Average || 0);
+                        const height = ((value || 0) / maxResponseTime) * 200;
                         return (
                           <div
                             key={index}
@@ -928,32 +1004,37 @@ export default function ResourceDetailPage() {
                               style={{ height: `${height}px` }}
                             />
                             <span className="text-xs text-muted-foreground mt-2">
-                              {new Date(dataPoint.timeStamp).getHours()}:00
+                              {isTestUser() 
+                                ? new Date(dataPoint.timeStamp).getHours() + ":00"
+                                : new Date(dataPoint.TimeStamp).getHours() + ":00"}
                             </span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>
                       Peak:{" "}
-                      {formatResponseTime(
-                        Math.max(
-                          ...getResponseTimeMetricData().map(
-                            (d) => d.average || 0
-                          )
-                        )
-                      )}
+                      {(() => {
+                        const responseTimeData = isTestUser() 
+                          ? getResponseTimeMetricData() 
+                          : (azureMetrics?.AverageResponseTime || azureMetrics?.SuccessServerLatency || []);
+                        const values = responseTimeData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        const maxValue = Math.max(...values, 0);
+                        return isTestUser() ? formatResponseTime(maxValue) : `${Math.round(maxValue)}ms`;
+                      })()}
                     </span>
                     <span>
                       Low:{" "}
-                      {formatResponseTime(
-                        Math.min(
-                          ...getResponseTimeMetricData().map(
-                            (d) => d.average || 0
-                          )
-                        )
-                      )}
+                      {(() => {
+                        const responseTimeData = isTestUser() 
+                          ? getResponseTimeMetricData() 
+                          : (azureMetrics?.AverageResponseTime || azureMetrics?.SuccessServerLatency || []);
+                        const values = responseTimeData.map(d => isTestUser() ? (d.average || 0) : (d.Average || 0));
+                        const minValue = Math.min(...values, 0);
+                        return isTestUser() ? formatResponseTime(minValue) : `${Math.round(minValue)}ms`;
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -976,10 +1057,12 @@ export default function ResourceDetailPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-2xl font-bold text-red-600">
-                        {getErrorsMetricData().reduce(
-                          (sum, d) => sum + (d.total || 0),
-                          0
-                        )}
+                        {(() => {
+                          const errorData = isTestUser() 
+                            ? getErrorsMetricData() 
+                            : (azureMetrics?.Http4xx || []);
+                          return errorData.reduce((sum, d) => sum + (isTestUser() ? (d.total || 0) : (d.Total || 0)), 0);
+                        })()}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         Total 4xx errors
@@ -990,24 +1073,22 @@ export default function ResourceDetailPage() {
                   <div className="text-sm text-muted-foreground">
                     <p>
                       Error Rate:{" "}
-                      {(
-                        (getErrorsMetricData().reduce(
-                          (sum, d) => sum + (d.total || 0),
-                          0
-                        ) /
-                          getRequestsMetricData().reduce(
-                            (sum, d) => sum + (d.total || 0),
-                            0
-                          )) *
-                        100
-                      ).toFixed(2)}
+                      {(() => {
+                        const errorData = isTestUser() ? getErrorsMetricData() : (azureMetrics?.Http4xx || []);
+                        const requestData = isTestUser() ? getRequestsMetricData() : (azureMetrics?.Requests || azureMetrics?.Transactions || []);
+                        const errorTotal = errorData.reduce((sum, d) => sum + (isTestUser() ? (d.total || 0) : (d.Total || 0)), 0);
+                        const requestTotal = requestData.reduce((sum, d) => sum + (isTestUser() ? (d.total || 0) : (d.Total || 0)), 0);
+                        return requestTotal > 0 ? ((errorTotal / requestTotal) * 100).toFixed(2) : "0.00";
+                      })()}
                       %
                     </p>
                     <p>
                       Peak Hour:{" "}
-                      {Math.max(
-                        ...getErrorsMetricData().map((d) => d.total || 0)
-                      )}{" "}
+                      {(() => {
+                        const errorData = isTestUser() ? getErrorsMetricData() : (azureMetrics?.Http4xx || []);
+                        const values = errorData.map(d => isTestUser() ? (d.total || 0) : (d.Total || 0));
+                        return Math.max(...values, 0);
+                      })()}{" "}
                       errors
                     </p>
                   </div>
@@ -1031,12 +1112,15 @@ export default function ResourceDetailPage() {
                         Data In
                       </p>
                       <p className="text-xl font-bold text-blue-600">
-                        {formatBytes(
-                          getBandwidthMetricData().dataIn.reduce(
-                            (sum, d) => sum + (d.total || 0),
-                            0
-                          )
-                        )}
+                        {(() => {
+                          if (isTestUser()) {
+                            return formatBytes(getBandwidthMetricData().dataIn.reduce((sum, d) => sum + (d.total || 0), 0));
+                          } else {
+                            const ingressData = azureMetrics?.Ingress || [];
+                            const total = ingressData.reduce((sum, d) => sum + (d.Total || 0), 0);
+                            return formatBytes(total);
+                          }
+                        })()}
                       </p>
                     </div>
                     <div>
@@ -1044,28 +1128,35 @@ export default function ResourceDetailPage() {
                         Data Out
                       </p>
                       <p className="text-xl font-bold text-green-600">
-                        {formatBytes(
-                          getBandwidthMetricData().dataOut.reduce(
-                            (sum, d) => sum + (d.total || 0),
-                            0
-                          )
-                        )}
+                        {(() => {
+                          if (isTestUser()) {
+                            return formatBytes(getBandwidthMetricData().dataOut.reduce((sum, d) => sum + (d.total || 0), 0));
+                          } else {
+                            const egressData = azureMetrics?.Egress || [];
+                            const total = egressData.reduce((sum, d) => sum + (d.Total || 0), 0);
+                            return formatBytes(total);
+                          }
+                        })()}
                       </p>
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
                     <p>
                       Total Transfer:{" "}
-                      {formatBytes(
-                        getBandwidthMetricData().dataIn.reduce(
-                          (sum, d) => sum + (d.total || 0),
-                          0
-                        ) +
-                          getBandwidthMetricData().dataOut.reduce(
-                            (sum, d) => sum + (d.total || 0),
-                            0
-                          )
-                      )}
+                      {(() => {
+                        if (isTestUser()) {
+                          return formatBytes(
+                            getBandwidthMetricData().dataIn.reduce((sum, d) => sum + (d.total || 0), 0) +
+                            getBandwidthMetricData().dataOut.reduce((sum, d) => sum + (d.total || 0), 0)
+                          );
+                        } else {
+                          const ingressData = azureMetrics?.Ingress || [];
+                          const egressData = azureMetrics?.Egress || [];
+                          const inTotal = ingressData.reduce((sum, d) => sum + (d.Total || 0), 0);
+                          const outTotal = egressData.reduce((sum, d) => sum + (d.Total || 0), 0);
+                          return formatBytes(inTotal + outTotal);
+                        }
+                      })()}
                     </p>
                   </div>
                 </div>
@@ -1083,7 +1174,7 @@ export default function ResourceDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="bg-muted/20 p-4 rounded text-xs font-mono overflow-auto max-h-96">
-                <pre>{JSON.stringify(mockAzureMetricsResponse, null, 2)}</pre>
+                <pre>{JSON.stringify(isTestUser() ? mockAzureMetricsResponse : azureMetrics, null, 2)}</pre>
               </div>
             </CardContent>
           </Card>
@@ -1096,38 +1187,57 @@ export default function ResourceDetailPage() {
             <CardHeader>
               <CardTitle>Application Logs</CardTitle>
               <CardDescription>
-                Recent log entries from your application
+                {isTestUser() ? "Recent log entries from your application" : "Real-time application logs"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {logs.map((log, index) => (
-                  <div key={index} className="border-l-2 border-gray-200 pl-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <Badge
-                          variant={
-                            log.level === "Error"
-                              ? "destructive"
-                              : log.level === "Warning"
-                              ? "secondary"
-                              : "default"
-                          }
-                        >
-                          {log.level}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {log.source}
+              {!isTestUser() ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-4" />
+                  <p className="text-lg font-medium mb-2">Logs Coming Soon</p>
+                  <p>Azure Log Analytics integration is in development.</p>
+                  <p className="text-sm">Application logs, error tracking, and diagnostics will be available here.</p>
+                  <Button variant="outline" className="mt-4" asChild>
+                    <a
+                      href={`https://portal.azure.com`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      View in Azure Portal
+                    </a>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {logs.map((log, index) => (
+                    <div key={index} className="border-l-2 border-gray-200 pl-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Badge
+                            variant={
+                              log.level === "Error"
+                                ? "destructive"
+                                : log.level === "Warning"
+                                ? "secondary"
+                                : "default"
+                            }
+                          >
+                            {log.level}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {log.source}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDate(log.timestamp)}
                         </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDate(log.timestamp)}
-                      </span>
+                      <p className="text-sm mt-1">{log.message}</p>
                     </div>
-                    <p className="text-sm mt-1">{log.message}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

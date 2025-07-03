@@ -44,9 +44,8 @@ public class LoginRequest
 
 public class AddAzureCredentialsRequest
 {
-    [Required(ErrorMessage = "Subscription ID is required")]
-    [RegularExpression(@"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-        ErrorMessage = "Subscription ID must be a valid GUID")]
+    [RegularExpression(@"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})?$",
+        ErrorMessage = "Subscription ID must be a valid GUID or empty")]
     public string SubscriptionId { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Tenant ID is required")]
@@ -221,10 +220,11 @@ public static class InputValidator
     {
         var result = new ValidationResult { IsValid = true };
 
-        if (!IsValidGuid(request.SubscriptionId))
+        // Subscription ID is optional - if provided, it must be a valid GUID
+        if (!string.IsNullOrEmpty(request.SubscriptionId) && !IsValidGuid(request.SubscriptionId))
         {
             result.IsValid = false;
-            result.Errors.Add("Subscription ID must be a valid GUID");
+            result.Errors.Add("Subscription ID must be a valid GUID if provided");
         }
 
         if (!IsValidGuid(request.TenantId))

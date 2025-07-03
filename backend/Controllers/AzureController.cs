@@ -250,6 +250,24 @@ public class AzureController : ControllerBase
         }
     }
 
+    [HttpGet("resources/{id}/azure-metrics")]
+    public async Task<ActionResult<Dictionary<string, List<object>>>> GetAzureResourceMetrics(
+        int id, 
+        [FromQuery] DateTime? startTime = null, 
+        [FromQuery] DateTime? endTime = null)
+    {
+        try
+        {
+            var metrics = await _azureMonitoringService.GetAzureResourceMetricsAsync(id, startTime, endTime);
+            return Ok(metrics);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting Azure metrics for resource {ResourceId}", id);
+            return BadRequest("Failed to get Azure resource metrics");
+        }
+    }
+
     [HttpGet("projects/{id}/cost")]
     public async Task<ActionResult<decimal>> GetProjectCost(int id)
     {

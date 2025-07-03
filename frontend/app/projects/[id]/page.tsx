@@ -62,6 +62,8 @@ import { isTestUser } from "@/lib/test-user";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useParams, useRouter } from "next/navigation";
+import { AzureSubscriptionUpgrade } from "@/components/azure-subscription-upgrade";
+import { AzurePermissionError } from "@/components/azure-permission-error";
 
 export default function ProjectDetailsPage() {
   const params = useParams();
@@ -581,6 +583,20 @@ export default function ProjectDetailsPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Azure Permission Error - Show this FIRST if credentials are failing */}
+      {project?.userAzureCredentialId && azureCredentials.find(c => c.id === project.userAzureCredentialId && !c.isActive) && (
+        <AzurePermissionError 
+          credentialName={azureCredentials.find(c => c.id === project.userAzureCredentialId)?.subscriptionName}
+          servicePrincipalId={azureCredentials.find(c => c.id === project.userAzureCredentialId)?.clientId}
+          subscriptionId={azureCredentials.find(c => c.id === project.userAzureCredentialId)?.subscriptionId}
+        />
+      )}
+
+      {/* Azure Subscription Upgrade Helper */}
+      {failedResources > 0 && (
+        <AzureSubscriptionUpgrade />
       )}
 
       {/* Generate Recommendations Section */}

@@ -33,6 +33,10 @@ public class AzureResource
     
     public DateTime? DeletedAt { get; set; }
     
+    public string? ErrorMessage { get; set; }
+    
+    public DateTime? LastRetryAt { get; set; }
+    
     public List<ResourceMetric> Metrics { get; set; } = new();
 }
 

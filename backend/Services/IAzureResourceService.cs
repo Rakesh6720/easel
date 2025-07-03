@@ -6,6 +6,7 @@ public interface IAzureResourceService
 {
     Task<bool> ValidateAzureCredentialsAsync(UserAzureCredential credentials);
     Task<bool> ProvisionResourcesAsync(int projectId, List<AzureResourceRecommendation> recommendations);
+    Task<bool> RetryResourceAsync(int resourceId);
     Task<List<AzureResource>> GetProjectResourcesAsync(int projectId);
     Task<ResourceDeletionResponse> DeleteResourceAsync(int resourceId, bool confirmed = false);
     Task<List<string>> GetAvailableLocationsAsync(int credentialId);

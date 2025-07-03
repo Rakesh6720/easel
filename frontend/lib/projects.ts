@@ -1029,43 +1029,11 @@ class ProjectsService {
       });
     }
 
-    // For real users, we'll need to call the backend
-    // Since there's no specific retry endpoint, we'll try to reprovision
-    // by calling the provision endpoint with this resource's configuration
+    // For real users, call the dedicated retry endpoint
     try {
-      // First get the current project to find the resource
-      const project = await this.getProject(projectId);
-      const resource = project.resources.find((r) => r.id === resourceId);
-
-      if (!resource) {
-        throw new Error("Resource not found");
-      }
-
-      // Create a recommendation object from the resource
-      // Parse configuration if it's a string (from database)
-      let parsedConfiguration = resource.configuration;
-      if (typeof resource.configuration === "string") {
-        try {
-          parsedConfiguration = JSON.parse(resource.configuration);
-        } catch (e) {
-          console.warn("Failed to parse configuration JSON:", e);
-          parsedConfiguration = {};
-        }
-      }
-
-      const recommendation = {
-        ResourceType: resource.resourceType,
-        Name: resource.name,
-        Location: resource.location,
-        EstimatedMonthlyCost: resource.estimatedMonthlyCost,
-        Configuration: parsedConfiguration,
-        Reasoning: "Retry of failed resource",
-      };
-
-      // Call the provision endpoint with this single resource
       await axios.post(
-        `${API_BASE_URL}/projects/${projectId}/provision`,
-        { Recommendations: [recommendation] },
+        `${API_BASE_URL}/projects/${projectId}/resources/${resourceId}/retry`,
+        {},
         { headers: this.getAuthHeaders() }
       );
 

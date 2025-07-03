@@ -53,4 +53,9 @@ public class UserAzureCredential
     /// Last known subscription limits/quotas for resource planning
     /// </summary>
     public string SubscriptionLimits { get; set; } = string.Empty; // JSON object
+    
+    /// <summary>
+    /// Error message from last validation attempt
+    /// </summary>
+    public string? ErrorMessage { get; set; }
 }

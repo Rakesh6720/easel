@@ -170,6 +170,27 @@ public class ProjectsController : ControllerBase
         }
     }
 
+    [HttpPost("{id}/resources/{resourceId}/retry")]
+    public async Task<ActionResult> RetryResource(int id, int resourceId)
+    {
+        try
+        {
+            _logger.LogInformation("Received retry request for resource {ResourceId} in project {ProjectId}", resourceId, id);
+            
+            var success = await _azureResourceService.RetryResourceAsync(resourceId);
+            
+            if (success)
+                return Ok(new { message = "Resource retry completed successfully" });
+            else
+                return BadRequest("Failed to retry resource");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrying resource {ResourceId} in project {ProjectId}", resourceId, id);
+            return BadRequest("Failed to retry resource");
+        }
+    }
+
     [HttpPost("{id}/provision")]
     public async Task<ActionResult> ProvisionResources(int id, ProvisionResourcesRequest request)
     {

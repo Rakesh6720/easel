@@ -185,5 +185,36 @@ public class MockAzureResourceService : IAzureResourceService
             AssignedRoles = new List<string> { "b24988ac-6180-42a0-ab88-20f7382dd24c" } // Contributor role ID
         };
     }
+
+    public async Task<bool> RetryResourceAsync(int resourceId)
+    {
+        try
+        {
+            _logger.LogInformation("Mock retry for resource {ResourceId}", resourceId);
+            
+            var resource = await _context.AzureResources.FindAsync(resourceId);
+            if (resource == null) return false;
+            
+            // Simulate retry
+            resource.Status = ResourceStatus.Provisioning;
+            resource.ErrorMessage = null;
+            resource.LastRetryAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            
+            // Simulate provisioning time
+            await Task.Delay(2000);
+            
+            resource.Status = ResourceStatus.Active;
+            resource.ProvisionedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrying resource {ResourceId}", resourceId);
+            return false;
+        }
+    }
 }
 
